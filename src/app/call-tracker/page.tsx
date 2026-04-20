@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import type { Contact, ContactListResponse, Note, CallLog, CallLogResponse } from "@/types";
 import Link from "next/link";
+import { Device, Call } from "@twilio/voice-sdk";
 
 export default function CallTrackerPage() {
   return (
@@ -69,6 +70,9 @@ function CallTracker() {
   const [scheduledDate, setScheduledDate] = useState("");
   const [loading, setLoading] = useState(true);
   const [outcomeRequired, setOutcomeRequired] = useState(false);
+  const [twilioDevice, setTwilioDevice] = useState<Device | null>(null);
+  const [activeCall, setActiveCall] = useState<Call | null>(null);
+  const [callStatus, setCallStatus] = useState<string>("");
 
   const contact = contacts[index] ?? null;
 
@@ -105,11 +109,56 @@ function CallTracker() {
     fetchContactData();
   }, [fetchContactData]);
 
+  const initTwilioDevice = async (): Promise<Device> => {
+    if (twilioDevice) return twilioDevice;
+    const { token } = await apiFetch<{ token: string }>("/calls/token", { method: "POST" });
+    const device = new Device(token, { edge: "ashburn", closeProtection: true });
+    await device.register();
+    setTwilioDevice(device);
+    return device;
+  };
+
   const handleCall = async (phone: string, method: "browser" | "bridge") => {
     if (!contact) return;
     setOutcomeRequired(true);
-    // In production, browser calling would use Twilio JS SDK
-    alert(`${method === "browser" ? "Browser" : "Bridge"} call to ${phone}`);
+
+    if (method === "browser") {
+      try {
+        setCallStatus("Connecting...");
+        const device = await initTwilioDevice();
+        const call = await device.connect({ params: { To: phone } });
+        setActiveCall(call);
+        setCallStatus("Ringing...");
+
+        call.on("accept", () => setCallStatus("Connected"));
+        call.on("disconnect", () => {
+          setCallStatus("Call ended");
+          setActiveCall(null);
+          setTimeout(() => setCallStatus(""), 3000);
+        });
+        call.on("cancel", () => {
+          setCallStatus("");
+          setActiveCall(null);
+        });
+        call.on("error", (err) => {
+          setCallStatus(`Error: ${err.message}`);
+          setActiveCall(null);
+        });
+      } catch (err) {
+        setCallStatus(err instanceof Error ? err.message : "Call failed");
+      }
+    } else {
+      setCallStatus("Bridge calling not yet configured — use Browser calling");
+    }
+  };
+
+  const handleHangUp = () => {
+    if (activeCall) {
+      activeCall.disconnect();
+      setActiveCall(null);
+      setCallStatus("Call ended");
+      setTimeout(() => setCallStatus(""), 3000);
+    }
   };
 
   const handleLogCall = async () => {
@@ -379,6 +428,16 @@ function CallTracker() {
                 <p className="text-sm text-muted-foreground">No phone numbers available.</p>
               )}
             </div>
+            {(callStatus || activeCall) && (
+              <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+                <p className="text-sm font-medium">{callStatus}</p>
+                {activeCall && (
+                  <Button size="sm" variant="destructive" onClick={handleHangUp}>
+                    Hang up
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Call Outcome */}
