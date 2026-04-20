@@ -1,0 +1,522 @@
+"use client";
+
+import { useEffect, useState, useCallback } from "react";
+import AuthGuard from "@/components/layout/auth-guard";
+import AppSidebar from "@/components/layout/app-sidebar";
+import { apiFetch } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Phone,
+  PhoneCall,
+  ChevronLeft,
+  ChevronRight,
+  Upload,
+  Send,
+  Clock,
+  ExternalLink,
+  Plus,
+  Pencil,
+  Trash2,
+} from "lucide-react";
+import type { Contact, ContactListResponse, Note, CallLog, CallLogResponse } from "@/types";
+import Link from "next/link";
+
+export default function CallTrackerPage() {
+  return (
+    <AuthGuard>
+      {(user) => (
+        <div className="flex h-screen overflow-hidden">
+          <AppSidebar user={user} />
+          <main className="relative flex-1 overflow-y-auto bg-background">
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-primary/30 via-primary/70 to-primary/30" />
+            <CallTracker />
+          </main>
+        </div>
+      )}
+    </AuthGuard>
+  );
+}
+
+function CallTracker() {
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [index, setIndex] = useState(0);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [calls, setCalls] = useState<CallLog[]>([]);
+  const [outcome, setOutcome] = useState<string>("");
+  const [newNote, setNewNote] = useState("");
+  const [editingNote, setEditingNote] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [smsDialogOpen, setSmsDialogOpen] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [outcomeRequired, setOutcomeRequired] = useState(false);
+
+  const contact = contacts[index] ?? null;
+
+  const fetchContacts = useCallback(async () => {
+    try {
+      const data = await apiFetch<ContactListResponse>(
+        "/contacts?sort_by=created_at&sort_order=asc&per_page=200"
+      );
+      setContacts(data.contacts);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchContacts();
+  }, [fetchContacts]);
+
+  const fetchContactData = useCallback(async () => {
+    if (!contact) return;
+    setOutcome(contact.call_outcome || "");
+    setOutcomeRequired(false);
+    const [n, c] = await Promise.all([
+      apiFetch<Note[]>(`/contacts/${contact.id}/notes`).catch(() => []),
+      apiFetch<CallLog[]>(`/calls/contact/${contact.id}`).catch(() => []),
+    ]);
+    setNotes(n);
+    setCalls(c);
+  }, [contact]);
+
+  useEffect(() => {
+    fetchContactData();
+  }, [fetchContactData]);
+
+  const handleCall = async (phone: string, method: "browser" | "bridge") => {
+    if (!contact) return;
+    setOutcomeRequired(true);
+    // In production, browser calling would use Twilio JS SDK
+    alert(`${method === "browser" ? "Browser" : "Bridge"} call to ${phone}`);
+  };
+
+  const handleLogCall = async () => {
+    if (!contact || !outcome) return;
+    try {
+      const result = await apiFetch<CallLogResponse>("/calls/log", {
+        method: "POST",
+        body: JSON.stringify({
+          contact_id: contact.id,
+          call_method: "browser",
+          phone_number_called: contact.mobile_phone,
+          outcome,
+        }),
+      });
+      setCalls((prev) => [result.call_log, ...prev]);
+      setOutcomeRequired(false);
+
+      if (result.sms_prompt_needed) {
+        setSmsDialogOpen(true);
+      }
+
+      setContacts((prev) =>
+        prev.map((c) =>
+          c.id === contact.id
+            ? { ...c, call_outcome: outcome, call_occasion_count: result.occasion_count }
+            : c
+        )
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSendSms = async () => {
+    if (!contact) return;
+    try {
+      await apiFetch("/sms/send", {
+        method: "POST",
+        body: JSON.stringify({ contact_id: contact.id }),
+      });
+      setSmsDialogOpen(false);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleScheduleSms = async () => {
+    if (!contact || !scheduledDate) return;
+    try {
+      await apiFetch("/sms/schedule", {
+        method: "POST",
+        body: JSON.stringify({
+          contact_id: contact.id,
+          scheduled_at: new Date(scheduledDate).toISOString(),
+        }),
+      });
+      setSmsDialogOpen(false);
+      setScheduledDate("");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!contact || !newNote.trim()) return;
+    try {
+      const note = await apiFetch<Note>(`/contacts/${contact.id}/notes`, {
+        method: "POST",
+        body: JSON.stringify({ content: newNote }),
+      });
+      setNotes((prev) => [note, ...prev]);
+      setNewNote("");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateNote = async (noteId: string) => {
+    try {
+      const updated = await apiFetch<Note>(`/notes/${noteId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ content: editContent }),
+      });
+      setNotes((prev) => prev.map((n) => (n.id === noteId ? updated : n)));
+      setEditingNote(null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    try {
+      await apiFetch(`/notes/${noteId}`, { method: "DELETE" });
+      setNotes((prev) => prev.filter((n) => n.id !== noteId));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const goNext = () => {
+    if (outcomeRequired && !outcome) {
+      alert("Please select a call outcome before proceeding.");
+      return;
+    }
+    if (index < contacts.length - 1) setIndex(index + 1);
+  };
+
+  const goPrev = () => {
+    if (index > 0) setIndex(index - 1);
+  };
+
+  if (loading) {
+    return <div className="p-6 text-muted-foreground">Loading contacts...</div>;
+  }
+
+  if (contacts.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4">
+        <p className="text-muted-foreground">No contacts to call.</p>
+        <Link href="/import">
+          <Button>
+            <Upload size={14} className="mr-2" /> Import contacts
+          </Button>
+        </Link>
+      </div>
+    );
+  }
+
+  const atEnd = index >= contacts.length - 1;
+
+  const phones: [string, string | null][] = [
+    ["Mobile", contact?.mobile_phone ?? null],
+    ["Work", contact?.work_direct_phone ?? null],
+    ["Corporate", contact?.corporate_phone ?? null],
+  ];
+
+  return (
+    <div className="p-6 max-w-4xl mx-auto">
+      {/* Navigation */}
+      <div className="flex items-center justify-between mb-6">
+        <Button variant="outline" size="sm" onClick={goPrev} disabled={index === 0}>
+          <ChevronLeft size={14} className="mr-1" /> Previous
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          {index + 1} of {contacts.length}
+        </span>
+        {atEnd ? (
+          <Link href="/import">
+            <Button size="sm">
+              <Upload size={14} className="mr-1" /> Import more
+            </Button>
+          </Link>
+        ) : (
+          <Button variant="outline" size="sm" onClick={goNext}>
+            Next <ChevronRight size={14} className="ml-1" />
+          </Button>
+        )}
+      </div>
+
+      {contact && (
+        <div className="space-y-6">
+          {/* Contact Card */}
+          <div className="border border-border bg-card p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <h1 className="text-2xl font-semibold tracking-tight">
+                  {contact.first_name} {contact.last_name}
+                </h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {contact.title} at {contact.company_name}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-3xl font-mono font-bold">{contact.score ?? "—"}</p>
+                <Badge variant="outline" className="mt-1">
+                  {contact.company_type || "unscored"}
+                </Badge>
+              </div>
+            </div>
+
+            <Separator className="my-4" />
+
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              {contact.employees && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Employees</p>
+                  <p>{contact.employees}</p>
+                </div>
+              )}
+              {contact.city && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Location</p>
+                  <p>{contact.city}{contact.country ? `, ${contact.country}` : ""}</p>
+                </div>
+              )}
+              {contact.email && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Email</p>
+                  <p>{contact.email}</p>
+                </div>
+              )}
+              {contact.website && (
+                <div>
+                  <p className="text-xs text-muted-foreground">Website</p>
+                  <a
+                    href={contact.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline flex items-center gap-1"
+                  >
+                    {contact.website.replace(/^https?:\/\/(www\.)?/, "").slice(0, 30)}
+                    <ExternalLink size={10} />
+                  </a>
+                </div>
+              )}
+              {contact.person_linkedin_url && (
+                <div>
+                  <p className="text-xs text-muted-foreground">LinkedIn</p>
+                  <a
+                    href={contact.person_linkedin_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline flex items-center gap-1"
+                  >
+                    Profile <ExternalLink size={10} />
+                  </a>
+                </div>
+              )}
+              <div>
+                <p className="text-xs text-muted-foreground">Call occasions</p>
+                <p>{contact.call_occasion_count}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Phone Numbers + Dialer */}
+          <div className="border border-border bg-card p-6">
+            <h2 className="text-sm font-semibold mb-3">Phone Numbers</h2>
+            <div className="space-y-2">
+              {phones.map(([label, phone]) =>
+                phone ? (
+                  <div key={label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                    <div>
+                      <p className="text-xs text-muted-foreground">{label}</p>
+                      <p className="text-sm font-mono">{phone}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleCall(phone, "browser")}
+                      >
+                        <PhoneCall size={12} className="mr-1" /> Browser
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleCall(phone, "bridge")}
+                      >
+                        <Phone size={12} className="mr-1" /> Phone
+                      </Button>
+                    </div>
+                  </div>
+                ) : null
+              )}
+              {phones.every(([, p]) => !p) && (
+                <p className="text-sm text-muted-foreground">No phone numbers available.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Call Outcome */}
+          <div className="border border-border bg-card p-6">
+            <h2 className="text-sm font-semibold mb-3">Call Outcome</h2>
+            <div className="flex items-center gap-3">
+              <Select value={outcome} onValueChange={setOutcome}>
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue placeholder="Select outcome..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="didnt_pick_up">Didn&apos;t pick up</SelectItem>
+                  <SelectItem value="not_interested">Not interested</SelectItem>
+                  <SelectItem value="interested">Interested</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button onClick={handleLogCall} disabled={!outcome}>
+                Save outcome
+              </Button>
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div className="border border-border bg-card p-6">
+            <h2 className="text-sm font-semibold mb-3">Notes</h2>
+            <div className="flex gap-2 mb-4">
+              <Textarea
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                placeholder="Write a note..."
+                className="min-h-[60px]"
+              />
+              <Button onClick={handleAddNote} disabled={!newNote.trim()} className="self-end">
+                <Plus size={14} />
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {notes.map((note) => (
+                <div key={note.id} className="border border-border p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs text-muted-foreground">{note.note_date}</p>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => {
+                          setEditingNote(note.id);
+                          setEditContent(note.content);
+                        }}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteNote(note.id)}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                  {editingNote === note.id ? (
+                    <div className="flex gap-2">
+                      <Textarea
+                        value={editContent}
+                        onChange={(e) => setEditContent(e.target.value)}
+                        className="min-h-[40px]"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => handleUpdateNote(note.id)}
+                      >
+                        Save
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-sm">{note.content}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Call History */}
+          {calls.length > 0 && (
+            <div className="border border-border bg-card p-6">
+              <h2 className="text-sm font-semibold mb-3">Call History</h2>
+              <div className="space-y-2">
+                {calls.map((call) => (
+                  <div
+                    key={call.id}
+                    className="flex items-center justify-between py-2 border-b border-border last:border-0 text-sm"
+                  >
+                    <span>{call.call_date} — {call.call_method}</span>
+                    <Badge variant="outline">{call.outcome || "—"}</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SMS Dialog */}
+      <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send SMS to {contact?.first_name}?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This contact has been called {contact?.call_occasion_count} times.
+            Would you like to send a text message?
+          </p>
+          <div className="space-y-3 mt-2">
+            <div>
+              <Label>Or schedule for later</Label>
+              <Input
+                type="datetime-local"
+                value={scheduledDate}
+                onChange={(e) => setScheduledDate(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSmsDialogOpen(false)}>
+              Cancel
+            </Button>
+            {scheduledDate ? (
+              <Button onClick={handleScheduleSms}>
+                <Clock size={14} className="mr-1" /> Schedule
+              </Button>
+            ) : (
+              <Button onClick={handleSendSms}>
+                <Send size={14} className="mr-1" /> Send now
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
