@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Lock } from "lucide-react";
 import type { Settings } from "@/types";
 
 export default function SettingsPage() {
@@ -34,6 +34,11 @@ function SettingsContent() {
   const [template, setTemplate] = useState("");
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaved, setPasswordSaved] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
 
   useEffect(() => {
     apiFetch<Settings>("/settings")
@@ -60,6 +65,38 @@ function SettingsContent() {
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordError("");
+    if (!currentPassword || !newPassword) {
+      setPasswordError("All fields are required.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError("Password must be at least 6 characters.");
+      return;
+    }
+    try {
+      await apiFetch("/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword,
+        }),
+      });
+      setPasswordSaved(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => setPasswordSaved(false), 3000);
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : "Failed to change password");
     }
   };
 
@@ -117,6 +154,59 @@ function SettingsContent() {
           {saved && (
             <span className="flex items-center gap-1 text-sm text-green-600">
               <CheckCircle size={14} /> Saved
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-8 space-y-6 border border-border bg-card p-6">
+        <div className="flex items-center gap-2">
+          <Lock size={16} className="text-muted-foreground" />
+          <h2 className="text-lg font-semibold">Change Password</h2>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="current-password">Current Password</Label>
+          <Input
+            id="current-password"
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            className="max-w-xs"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="new-password">New Password</Label>
+          <Input
+            id="new-password"
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            className="max-w-xs"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="confirm-password">Confirm New Password</Label>
+          <Input
+            id="confirm-password"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            className="max-w-xs"
+          />
+        </div>
+
+        {passwordError && (
+          <p className="text-sm text-destructive">{passwordError}</p>
+        )}
+
+        <div className="flex items-center gap-3">
+          <Button onClick={handleChangePassword}>Update Password</Button>
+          {passwordSaved && (
+            <span className="flex items-center gap-1 text-sm text-green-600">
+              <CheckCircle size={14} /> Password updated
             </span>
           )}
         </div>
