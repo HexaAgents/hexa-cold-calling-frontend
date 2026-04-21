@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import AuthGuard from "@/components/layout/auth-guard";
 import AppSidebar from "@/components/layout/app-sidebar";
 import { apiUpload, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Upload, FileText, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, FileText, AlertCircle } from "lucide-react";
 import type { ImportBatch } from "@/types";
 
 export default function ImportPage() {
@@ -28,40 +27,31 @@ export default function ImportPage() {
 function ImportContent() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
-  const [activeBatch, setActiveBatch] = useState<ImportBatch | null>(null);
-  const [recentBatches, setRecentBatches] = useState<ImportBatch[]>([]);
+  const [batches, setBatches] = useState<ImportBatch[]>([]);
   const [error, setError] = useState("");
   const [dragOver, setDragOver] = useState(false);
 
-  useEffect(() => {
-    apiFetch<ImportBatch[]>("/imports/recent")
-      .then(setRecentBatches)
-      .catch(console.error);
+  const hasProcessing = batches.some((b) => b.status === "processing");
+
+  const fetchBatches = useCallback(async () => {
+    try {
+      const data = await apiFetch<ImportBatch[]>("/imports/recent");
+      setBatches(data);
+    } catch (err) {
+      console.error(err);
+    }
   }, []);
 
   useEffect(() => {
-    if (!activeBatch || activeBatch.status !== "processing") return;
+    fetchBatches();
+  }, [fetchBatches]);
 
-    const interval = setInterval(async () => {
-      try {
-        const batches = await apiFetch<ImportBatch[]>("/imports/recent");
-        setRecentBatches(batches);
-        const current = activeBatch.id
-          ? batches.find((b) => b.id === activeBatch.id)
-          : batches.find((b) => b.status === "processing");
-        if (current) {
-          setActiveBatch(current);
-          if (current.status !== "processing") {
-            clearInterval(interval);
-          }
-        }
-      } catch {
-        clearInterval(interval);
-      }
-    }, 2000);
+  useEffect(() => {
+    if (!hasProcessing) return;
 
+    const interval = setInterval(fetchBatches, 2000);
     return () => clearInterval(interval);
-  }, [activeBatch]);
+  }, [hasProcessing, fetchBatches]);
 
   const handleUpload = async (file: File) => {
     if (!file.name.endsWith(".csv")) {
@@ -73,18 +63,24 @@ function ImportContent() {
     setUploading(true);
 
     try {
-      await apiUpload<{ status: string }>("/imports/upload", file);
-      setActiveBatch({
-        id: "",
-        user_id: "",
-        filename: file.name,
-        total_rows: 0,
-        processed_rows: 0,
-        stored_rows: 0,
-        discarded_rows: 0,
-        status: "processing",
-        created_at: new Date().toISOString(),
-      });
+      const result = await apiUpload<{ batch_id: string; total_rows: number }>(
+        "/imports/upload",
+        file
+      );
+      setBatches((prev) => [
+        {
+          id: result.batch_id,
+          user_id: "",
+          filename: file.name,
+          total_rows: result.total_rows,
+          processed_rows: 0,
+          stored_rows: 0,
+          discarded_rows: 0,
+          status: "processing",
+          created_at: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -99,11 +95,6 @@ function ImportContent() {
     if (file) handleUpload(file);
   };
 
-  const progressPct =
-    activeBatch && activeBatch.total_rows > 0
-      ? Math.round((activeBatch.processed_rows / activeBatch.total_rows) * 100)
-      : 0;
-
   return (
     <div className="p-6 max-w-2xl">
       <h1 className="text-2xl font-semibold tracking-tight mb-1">Import</h1>
@@ -111,7 +102,6 @@ function ImportContent() {
         Upload an Apollo CSV export to score and import contacts.
       </p>
 
-      {/* Drop zone */}
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -154,86 +144,53 @@ function ImportContent() {
         </div>
       )}
 
-      {/* Active import progress */}
-      {activeBatch && (
-        <div className="mt-6 border border-border bg-card p-6">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <FileText size={14} className="text-muted-foreground" />
-              <span className="text-sm font-medium">{activeBatch.filename}</span>
-            </div>
-            <Badge
-              variant={
-                activeBatch.status === "completed"
-                  ? "default"
-                  : activeBatch.status === "failed"
-                  ? "destructive"
-                  : "secondary"
-              }
-            >
-              {activeBatch.status}
-            </Badge>
-          </div>
-
-          {activeBatch.status === "processing" && (
-            <div className="mt-3">
-              <div className="h-2 w-full bg-muted overflow-hidden">
-                <div
-                  className="h-full bg-primary transition-all duration-500"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                {activeBatch.processed_rows} / {activeBatch.total_rows} rows
-                processed
-              </p>
-            </div>
-          )}
-
-          {activeBatch.status === "completed" && (
-            <div className="mt-3 flex items-center gap-4 text-sm">
-              <span className="flex items-center gap-1 text-green-600">
-                <CheckCircle size={14} /> {activeBatch.stored_rows} stored
-              </span>
-              <span className="text-muted-foreground">
-                {activeBatch.discarded_rows} discarded
-              </span>
-            </div>
-          )}
+      {batches.length > 0 && (
+        <div className="mt-8 space-y-3">
+          <h2 className="text-sm font-semibold">Imports</h2>
+          {batches.map((batch) => (
+            <ImportRow key={batch.id} batch={batch} />
+          ))}
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* Recent imports */}
-      {recentBatches.length > 0 && (
-        <div className="mt-8">
-          <h2 className="text-sm font-semibold mb-3">Recent imports</h2>
-          <div className="space-y-2">
-            {recentBatches.map((batch) => (
-              <div
-                key={batch.id}
-                className="flex items-center justify-between border border-border p-3 text-sm"
-              >
-                <div className="flex items-center gap-2">
-                  <FileText size={14} className="text-muted-foreground" />
-                  <span>{batch.filename}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-muted-foreground">
-                    {batch.stored_rows} stored, {batch.discarded_rows} discarded
-                  </span>
-                  <Badge
-                    variant={
-                      batch.status === "completed" ? "default" : "secondary"
-                    }
-                  >
-                    {batch.status}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
+function ImportRow({ batch }: { batch: ImportBatch }) {
+  const total = batch.total_rows || 1;
+  const processed = batch.processed_rows;
+  const pct = Math.round((processed / total) * 100);
+  const isComplete = batch.status === "completed";
+  const isFailed = batch.status === "failed";
+
+  return (
+    <div className="border border-border bg-card p-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <FileText size={14} className="text-muted-foreground" />
+          <span className="text-sm font-medium">{batch.filename}</span>
         </div>
-      )}
+        <span className="text-xs text-muted-foreground font-mono">
+          {processed} / {batch.total_rows}
+        </span>
+      </div>
+
+      <div className="h-2 w-full bg-muted overflow-hidden">
+        <div
+          className={`h-full transition-all duration-500 ${
+            isFailed ? "bg-destructive" : "bg-primary"
+          }`}
+          style={{ width: `${isComplete ? 100 : pct}%` }}
+        />
+      </div>
+
+      <p className="text-xs text-muted-foreground mt-2">
+        {isFailed
+          ? `Failed — ${batch.stored_rows} stored, ${batch.discarded_rows} discarded before error`
+          : isComplete
+          ? `Complete — ${batch.stored_rows} stored, ${batch.discarded_rows} discarded`
+          : `${batch.stored_rows} stored, ${batch.discarded_rows} discarded so far`}
+      </p>
     </div>
   );
 }
