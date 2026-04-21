@@ -200,14 +200,7 @@ function CallTracker() {
     }
   };
 
-  const handleDeleteCallLog = async (callId: string) => {
-    try {
-      await apiFetch(`/calls/${callId}`, { method: "DELETE" });
-      setCalls((prev) => prev.filter((c) => c.id !== callId));
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const hasLoggedThisCall = outcomeSaved || (!outcomeRequired && calls.length > 0 && outcome !== "");
 
   const handleSendSms = async () => {
     if (!contact) return;
@@ -480,8 +473,8 @@ function CallTracker() {
                   <SelectItem value="interested">Interested</SelectItem>
                 </SelectContent>
               </Select>
-              <Button onClick={handleLogCall} disabled={!outcome}>
-                Save outcome
+              <Button onClick={handleLogCall} disabled={!outcome || hasLoggedThisCall}>
+                {hasLoggedThisCall ? "Outcome Saved" : "Save Outcome"}
               </Button>
               {outcomeSaved && (
                 <span className="flex items-center gap-1 text-sm text-green-600">
@@ -566,25 +559,17 @@ function CallTracker() {
                         {call.call_method === "browser" ? "Browser Call" : "Phone Call"}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        variant={
-                          call.outcome === "interested"
-                            ? "default"
-                            : call.outcome === "not_interested"
-                            ? "destructive"
-                            : "outline"
-                        }
-                      >
-                        {formatOutcome(call.outcome)}
-                      </Badge>
-                      <button
-                        onClick={() => handleDeleteCallLog(call.id)}
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
+                    <Badge
+                      variant={
+                        call.outcome === "interested"
+                          ? "default"
+                          : call.outcome === "not_interested"
+                          ? "destructive"
+                          : "outline"
+                      }
+                    >
+                      {formatOutcome(call.outcome)}
+                    </Badge>
                   </div>
                 ))}
               </div>
@@ -655,7 +640,7 @@ function CallTracker() {
             <Button variant="outline" onClick={() => setOutcomeDialogOpen(false)}>
               Skip
             </Button>
-            <Button onClick={handleLogCall} disabled={!outcome}>
+            <Button onClick={handleLogCall} disabled={!outcome || hasLoggedThisCall}>
               Save Outcome
             </Button>
           </DialogFooter>
