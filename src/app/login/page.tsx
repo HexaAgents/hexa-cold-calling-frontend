@@ -21,7 +21,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const result = await apiFetch<{ access_token: string; user: Record<string, string> }>(
+      const result = await apiFetch<{ access_token: string; refresh_token: string; user: Record<string, string> }>(
         "/auth/login",
         {
           method: "POST",
@@ -29,6 +29,7 @@ export default function LoginPage() {
         }
       );
       localStorage.setItem("access_token", result.access_token);
+      localStorage.setItem("refresh_token", result.refresh_token);
       localStorage.setItem("user", JSON.stringify(result.user));
       router.push("/contacts");
     } catch (err) {

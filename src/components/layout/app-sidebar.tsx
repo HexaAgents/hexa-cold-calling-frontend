@@ -36,6 +36,7 @@ export default function AppSidebar({ user }: AppSidebarProps) {
 
   const handleLogout = () => {
     localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
     localStorage.removeItem("user");
     router.push("/login");
   };
