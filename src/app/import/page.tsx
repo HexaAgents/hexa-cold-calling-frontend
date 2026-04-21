@@ -44,15 +44,16 @@ function ImportContent() {
 
     const interval = setInterval(async () => {
       try {
-        const updated = await apiFetch<ImportBatch>(
-          `/imports/${activeBatch.id}/status`
-        );
-        setActiveBatch(updated);
-        if (updated.status !== "processing") {
-          clearInterval(interval);
-          apiFetch<ImportBatch[]>("/imports/recent")
-            .then(setRecentBatches)
-            .catch(console.error);
+        const batches = await apiFetch<ImportBatch[]>("/imports/recent");
+        setRecentBatches(batches);
+        const current = activeBatch.id
+          ? batches.find((b) => b.id === activeBatch.id)
+          : batches.find((b) => b.status === "processing");
+        if (current) {
+          setActiveBatch(current);
+          if (current.status !== "processing") {
+            clearInterval(interval);
+          }
         }
       } catch {
         clearInterval(interval);
@@ -72,12 +73,9 @@ function ImportContent() {
     setUploading(true);
 
     try {
-      const result = await apiUpload<{ batch_id: string }>(
-        "/imports/upload",
-        file
-      );
+      await apiUpload<{ status: string }>("/imports/upload", file);
       setActiveBatch({
-        id: result.batch_id,
+        id: "",
         user_id: "",
         filename: file.name,
         total_rows: 0,
