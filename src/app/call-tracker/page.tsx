@@ -36,6 +36,7 @@ import {
   Plus,
   Pencil,
   Trash2,
+  CheckCircle,
 } from "lucide-react";
 import type { Contact, ContactListResponse, Note, CallLog, CallLogResponse } from "@/types";
 import Link from "next/link";
@@ -73,6 +74,8 @@ function CallTracker() {
   const [twilioDevice, setTwilioDevice] = useState<Device | null>(null);
   const [activeCall, setActiveCall] = useState<Call | null>(null);
   const [callStatus, setCallStatus] = useState<string>("");
+  const [outcomeSaved, setOutcomeSaved] = useState(false);
+  const [outcomeDialogOpen, setOutcomeDialogOpen] = useState(false);
 
   const contact = contacts[index] ?? null;
 
@@ -134,6 +137,7 @@ function CallTracker() {
         call.on("disconnect", () => {
           setCallStatus("Call ended");
           setActiveCall(null);
+          setOutcomeDialogOpen(true);
           setTimeout(() => setCallStatus(""), 3000);
         });
         call.on("cancel", () => {
@@ -157,6 +161,7 @@ function CallTracker() {
       activeCall.disconnect();
       setActiveCall(null);
       setCallStatus("Call ended");
+      setOutcomeDialogOpen(true);
       setTimeout(() => setCallStatus(""), 3000);
     }
   };
@@ -175,6 +180,9 @@ function CallTracker() {
       });
       setCalls((prev) => [result.call_log, ...prev]);
       setOutcomeRequired(false);
+      setOutcomeDialogOpen(false);
+      setOutcomeSaved(true);
+      setTimeout(() => setOutcomeSaved(false), 3000);
 
       if (result.sms_prompt_needed) {
         setSmsDialogOpen(true);
@@ -187,6 +195,15 @@ function CallTracker() {
             : c
         )
       );
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteCallLog = async (callId: string) => {
+    try {
+      await apiFetch(`/calls/${callId}`, { method: "DELETE" });
+      setCalls((prev) => prev.filter((c) => c.id !== callId));
     } catch (err) {
       console.error(err);
     }
@@ -268,6 +285,15 @@ function CallTracker() {
 
   const goPrev = () => {
     if (index > 0) setIndex(index - 1);
+  };
+
+  const formatOutcome = (val: string | null) => {
+    const labels: Record<string, string> = {
+      didnt_pick_up: "Didn't Pick Up",
+      not_interested: "Not Interested",
+      interested: "Interested",
+    };
+    return val ? labels[val] || val : "—";
   };
 
   if (loading) {
@@ -449,14 +475,19 @@ function CallTracker() {
                   <SelectValue placeholder="Select outcome..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="didnt_pick_up">Didn&apos;t pick up</SelectItem>
-                  <SelectItem value="not_interested">Not interested</SelectItem>
+                  <SelectItem value="didnt_pick_up">Didn&apos;t Pick Up</SelectItem>
+                  <SelectItem value="not_interested">Not Interested</SelectItem>
                   <SelectItem value="interested">Interested</SelectItem>
                 </SelectContent>
               </Select>
               <Button onClick={handleLogCall} disabled={!outcome}>
                 Save outcome
               </Button>
+              {outcomeSaved && (
+                <span className="flex items-center gap-1 text-sm text-green-600">
+                  <CheckCircle size={14} /> Saved
+                </span>
+              )}
             </div>
           </div>
 
@@ -529,8 +560,31 @@ function CallTracker() {
                     key={call.id}
                     className="flex items-center justify-between py-2 border-b border-border last:border-0 text-sm"
                   >
-                    <span>{call.call_date} — {call.call_method}</span>
-                    <Badge variant="outline">{call.outcome || "—"}</Badge>
+                    <div className="flex items-center gap-3">
+                      <span className="text-muted-foreground">{call.call_date}</span>
+                      <Badge variant="secondary" className="capitalize">
+                        {call.call_method === "browser" ? "Browser Call" : "Phone Call"}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={
+                          call.outcome === "interested"
+                            ? "default"
+                            : call.outcome === "not_interested"
+                            ? "destructive"
+                            : "outline"
+                        }
+                      >
+                        {formatOutcome(call.outcome)}
+                      </Badge>
+                      <button
+                        onClick={() => handleDeleteCallLog(call.id)}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -573,6 +627,37 @@ function CallTracker() {
                 <Send size={14} className="mr-1" /> Send now
               </Button>
             )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Outcome Prompt Dialog — appears after call ends */}
+      <Dialog open={outcomeDialogOpen} onOpenChange={setOutcomeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>How did the call go?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Select the outcome for your call with {contact?.first_name} {contact?.last_name}.
+          </p>
+          <div className="mt-3">
+            <Select value={outcome} onValueChange={setOutcome}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select outcome..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="didnt_pick_up">Didn&apos;t Pick Up</SelectItem>
+                <SelectItem value="not_interested">Not Interested</SelectItem>
+                <SelectItem value="interested">Interested</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOutcomeDialogOpen(false)}>
+              Skip
+            </Button>
+            <Button onClick={handleLogCall} disabled={!outcome}>
+              Save Outcome
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
