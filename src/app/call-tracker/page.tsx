@@ -191,7 +191,7 @@ function CallTracker() {
       setContacts((prev) =>
         prev.map((c) =>
           c.id === contact.id
-            ? { ...c, call_outcome: outcome, call_occasion_count: result.occasion_count }
+            ? { ...c, call_outcome: outcome, call_occasion_count: result.occasion_count, times_called: result.times_called }
             : c
         )
       );
@@ -407,8 +407,8 @@ function CallTracker() {
                 </div>
               )}
               <div>
-                <p className="text-xs text-muted-foreground">Call occasions</p>
-                <p>{contact.call_occasion_count}</p>
+                <p className="text-xs text-muted-foreground">Times called</p>
+                <p>{contact.times_called ?? 0}</p>
               </div>
             </div>
           </div>
@@ -585,7 +585,7 @@ function CallTracker() {
             <DialogTitle>Send SMS to {contact?.first_name}?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            This contact has been called {contact?.call_occasion_count} times.
+            This contact has been called {contact?.times_called ?? 0} times.
             Would you like to send a text message?
           </p>
           <div className="space-y-3 mt-2">

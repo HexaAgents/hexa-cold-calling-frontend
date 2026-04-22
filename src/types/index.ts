@@ -21,6 +21,7 @@ export interface Contact {
   exa_scrape_success: boolean;
   scoring_failed: boolean;
   call_occasion_count: number;
+  times_called: number;
   call_outcome: string | null;
   messaging_status: string | null;
   sms_sent: boolean;
@@ -52,6 +53,7 @@ export interface CallLogResponse {
   call_log: CallLog;
   sms_prompt_needed: boolean;
   occasion_count: number;
+  times_called: number;
 }
 
 export interface Note {

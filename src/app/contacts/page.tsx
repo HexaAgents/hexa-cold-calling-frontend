@@ -153,7 +153,7 @@ function ContactsContent() {
               </TableHead>
               <TableHead>
                 <button
-                  onClick={() => toggleSort("call_occasion_count")}
+                  onClick={() => toggleSort("times_called")}
                   className="flex items-center gap-1"
                 >
                   Calls <ArrowUpDown size={12} />
@@ -200,7 +200,7 @@ function ContactsContent() {
                   <TableCell>
                     <span className="font-mono text-sm">{c.score ?? "—"}</span>
                   </TableCell>
-                  <TableCell>{c.call_occasion_count}</TableCell>
+                  <TableCell>{c.times_called ?? 0}</TableCell>
                   <TableCell>
                     <Badge variant={statusVariant(c)}>{displayStatus(c)}</Badge>
                   </TableCell>
