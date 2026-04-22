@@ -9,6 +9,7 @@ export interface Contact {
   company_linkedin_url: string | null;
   employees: string | null;
   city: string | null;
+  state: string | null;
   country: string | null;
   email: string | null;
   mobile_phone: string | null;

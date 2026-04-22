@@ -37,6 +37,7 @@ import {
   Trash2,
   CheckCircle,
   SkipForward,
+  Filter,
 } from "lucide-react";
 import type { Contact, Note, CallLog, CallLogResponse } from "@/types";
 import Link from "next/link";
@@ -58,6 +59,12 @@ export default function CallTrackerPage() {
   );
 }
 
+interface LocationOptions {
+  cities: string[];
+  states: string[];
+  countries: string[];
+}
+
 function CallTracker() {
   const [contact, setContact] = useState<Contact | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -68,7 +75,7 @@ function CallTracker() {
   const [editContent, setEditContent] = useState("");
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
   const [scheduledDate, setScheduledDate] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [outcomeRequired, setOutcomeRequired] = useState(false);
   const [twilioDevice, setTwilioDevice] = useState<Device | null>(null);
   const [activeCall, setActiveCall] = useState<Call | null>(null);
@@ -76,6 +83,29 @@ function CallTracker() {
   const [outcomeSaved, setOutcomeSaved] = useState(false);
   const [outcomeDialogOpen, setOutcomeDialogOpen] = useState(false);
   const [queueEmpty, setQueueEmpty] = useState(false);
+
+  const [locations, setLocations] = useState<LocationOptions>({ cities: [], states: [], countries: [] });
+  const [filterCity, setFilterCity] = useState("");
+  const [filterState, setFilterState] = useState("");
+  const [filterCountry, setFilterCountry] = useState("");
+  const [started, setStarted] = useState(false);
+  const [loadingLocations, setLoadingLocations] = useState(true);
+
+  useEffect(() => {
+    apiFetch<LocationOptions>("/contacts/locations")
+      .then(setLocations)
+      .catch(() => {})
+      .finally(() => setLoadingLocations(false));
+  }, []);
+
+  const buildFilterQuery = useCallback(() => {
+    const params = new URLSearchParams();
+    if (filterCity) params.set("city", filterCity);
+    if (filterState) params.set("state", filterState);
+    if (filterCountry) params.set("country", filterCountry);
+    const qs = params.toString();
+    return qs ? `?${qs}` : "";
+  }, [filterCity, filterState, filterCountry]);
 
   const claimNext = useCallback(async () => {
     setLoading(true);
@@ -85,7 +115,7 @@ function CallTracker() {
     setCalls([]);
     setNotes([]);
     try {
-      const next = await apiFetch<Contact | null>("/calls/next", { method: "POST" });
+      const next = await apiFetch<Contact | null>(`/calls/next${buildFilterQuery()}`, { method: "POST" });
       if (next && next.id) {
         setContact(next);
         setQueueEmpty(false);
@@ -100,11 +130,12 @@ function CallTracker() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [buildFilterQuery]);
 
-  useEffect(() => {
-    claimNext();
-  }, [claimNext]);
+  const handleStartCalling = async () => {
+    setStarted(true);
+    await claimNext();
+  };
 
   const fetchContactData = useCallback(async () => {
     if (!contact) return;
@@ -302,6 +333,58 @@ function CallTracker() {
     return val ? labels[val] || val : "—";
   };
 
+  if (loadingLocations) {
+    return <div className="p-6 text-muted-foreground">Loading...</div>;
+  }
+
+  if (!started) {
+    return (
+      <div className="p-6 max-w-xl mx-auto">
+        <h1 className="text-2xl font-semibold tracking-tight mb-1">Call Tracker</h1>
+        <p className="text-sm text-muted-foreground mb-6">
+          Filter contacts by location, then start calling. Contacts without a location are always included.
+        </p>
+        <div className="border border-border bg-card p-6 space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Country</p>
+              <Select value={filterCountry || "_all"} onValueChange={(v) => setFilterCountry(v === "_all" ? "" : v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">All</SelectItem>
+                  {locations.countries.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">State</p>
+              <Select value={filterState || "_all"} onValueChange={(v) => setFilterState(v === "_all" ? "" : v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">All</SelectItem>
+                  {locations.states.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">City</p>
+              <Select value={filterCity || "_all"} onValueChange={(v) => setFilterCity(v === "_all" ? "" : v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_all">All</SelectItem>
+                  {locations.cities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <Button className="w-full" onClick={handleStartCalling}>
+            Start Calling
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return <div className="p-6 text-muted-foreground">Loading next contact...</div>;
   }
@@ -314,6 +397,9 @@ function CallTracker() {
         <div className="flex gap-3">
           <Button variant="outline" onClick={claimNext}>
             Check again
+          </Button>
+          <Button variant="outline" onClick={() => setStarted(false)}>
+            <Filter size={14} className="mr-1" /> Change filters
           </Button>
           <Link href="/import">
             <Button>
@@ -333,6 +419,15 @@ function CallTracker() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
+      {/* Active filters indicator */}
+      {(filterCity || filterState || filterCountry) && (
+        <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
+          <Filter size={12} />
+          <span>Filtering: {[filterCountry, filterState, filterCity].filter(Boolean).join(" / ")}</span>
+          <button onClick={() => setStarted(false)} className="text-primary hover:underline ml-1">Change</button>
+        </div>
+      )}
+
       {/* Navigation */}
       <div className="flex items-center justify-between mb-6">
         <Button variant="ghost" size="sm" onClick={handleSkip}>
@@ -380,10 +475,10 @@ function CallTracker() {
                 <p>{contact.employees}</p>
               </div>
             )}
-            {contact.city && (
+            {(contact.city || contact.state || contact.country) && (
               <div>
                 <p className="text-xs text-muted-foreground">Location</p>
-                <p>{contact.city}{contact.country ? `, ${contact.country}` : ""}</p>
+                <p>{[contact.city, contact.state, contact.country].filter(Boolean).join(", ")}</p>
               </div>
             )}
             {contact.email && (
