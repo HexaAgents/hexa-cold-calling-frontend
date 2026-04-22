@@ -37,6 +37,7 @@ describe("ImportPage", () => {
         processed_rows: 50,
         stored_rows: 30,
         discarded_rows: 20,
+        enriched_rows: 0,
         status: "completed",
         created_at: "2026-04-20T00:00:00Z",
       },
@@ -60,6 +61,7 @@ describe("ImportPage", () => {
         processed_rows: 40,
         stored_rows: 25,
         discarded_rows: 15,
+        enriched_rows: 10,
         status: "processing",
         created_at: "2026-04-20T00:00:00Z",
       },
@@ -69,7 +71,8 @@ describe("ImportPage", () => {
     await waitFor(() => {
       expect(screen.getByText("importing.csv")).toBeInTheDocument();
       expect(screen.getByText("40 / 100")).toBeInTheDocument();
-      expect(screen.getByText(/25 stored, 15 discarded so far/)).toBeInTheDocument();
+      expect(screen.getByText(/25 stored/)).toBeInTheDocument();
+      expect(screen.getByText(/15 discarded/)).toBeInTheDocument();
     });
   });
 
@@ -83,6 +86,7 @@ describe("ImportPage", () => {
         processed_rows: 30,
         stored_rows: 10,
         discarded_rows: 20,
+        enriched_rows: 0,
         status: "failed",
         created_at: "2026-04-20T00:00:00Z",
       },

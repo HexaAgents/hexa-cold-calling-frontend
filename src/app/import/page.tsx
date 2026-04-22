@@ -76,6 +76,7 @@ function ImportContent() {
           processed_rows: 0,
           stored_rows: 0,
           discarded_rows: 0,
+          enriched_rows: 0,
           status: "processing",
           created_at: new Date().toISOString(),
         },
@@ -158,10 +159,11 @@ function ImportContent() {
 
 function ImportRow({ batch }: { batch: ImportBatch }) {
   const total = batch.total_rows || 1;
-  const processed = batch.processed_rows;
-  const pct = Math.round((processed / total) * 100);
+  const decided = batch.stored_rows + batch.discarded_rows;
+  const pct = Math.round((decided / total) * 100);
   const isComplete = batch.status === "completed";
   const isFailed = batch.status === "failed";
+  const enriched = batch.enriched_rows ?? 0;
 
   return (
     <div className="border border-border bg-card p-4">
@@ -171,7 +173,7 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
           <span className="text-sm font-medium">{batch.filename}</span>
         </div>
         <span className="text-xs text-muted-foreground font-mono">
-          {processed} / {batch.total_rows}
+          {decided} / {batch.total_rows}
         </span>
       </div>
 
@@ -188,8 +190,8 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
         {isFailed
           ? `Failed — ${batch.stored_rows} stored, ${batch.discarded_rows} discarded before error`
           : isComplete
-          ? `Complete — ${batch.stored_rows} stored, ${batch.discarded_rows} discarded`
-          : `${batch.stored_rows} stored, ${batch.discarded_rows} discarded so far`}
+          ? `Complete — ${batch.stored_rows} stored, ${batch.discarded_rows} discarded${enriched > 0 ? `, ${enriched} enriched` : ""}`
+          : `${batch.stored_rows} stored · ${batch.discarded_rows} discarded${enriched > 0 ? ` · ${enriched} enriching` : ""}`}
       </p>
     </div>
   );
