@@ -27,7 +27,6 @@ import { Label } from "@/components/ui/label";
 import {
   Phone,
   PhoneCall,
-  ChevronLeft,
   ChevronRight,
   Upload,
   Send,
@@ -37,8 +36,9 @@ import {
   Pencil,
   Trash2,
   CheckCircle,
+  SkipForward,
 } from "lucide-react";
-import type { Contact, ContactListResponse, Note, CallLog, CallLogResponse } from "@/types";
+import type { Contact, Note, CallLog, CallLogResponse } from "@/types";
 import Link from "next/link";
 import { Device, Call } from "@twilio/voice-sdk";
 
@@ -59,8 +59,7 @@ export default function CallTrackerPage() {
 }
 
 function CallTracker() {
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [index, setIndex] = useState(0);
+  const [contact, setContact] = useState<Contact | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [calls, setCalls] = useState<CallLog[]>([]);
   const [outcome, setOutcome] = useState<string>("");
@@ -76,25 +75,36 @@ function CallTracker() {
   const [callStatus, setCallStatus] = useState<string>("");
   const [outcomeSaved, setOutcomeSaved] = useState(false);
   const [outcomeDialogOpen, setOutcomeDialogOpen] = useState(false);
+  const [queueEmpty, setQueueEmpty] = useState(false);
 
-  const contact = contacts[index] ?? null;
-
-  const fetchContacts = useCallback(async () => {
+  const claimNext = useCallback(async () => {
+    setLoading(true);
+    setOutcome("");
+    setOutcomeSaved(false);
+    setOutcomeRequired(false);
+    setCalls([]);
+    setNotes([]);
     try {
-      const data = await apiFetch<ContactListResponse>(
-        "/contacts?sort_by=created_at&sort_order=asc&per_page=200"
-      );
-      setContacts(data.contacts);
+      const next = await apiFetch<Contact | null>("/calls/next", { method: "POST" });
+      if (next && next.id) {
+        setContact(next);
+        setQueueEmpty(false);
+      } else {
+        setContact(null);
+        setQueueEmpty(true);
+      }
     } catch (err) {
       console.error(err);
+      setContact(null);
+      setQueueEmpty(true);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchContacts();
-  }, [fetchContacts]);
+    claimNext();
+  }, [claimNext]);
 
   const fetchContactData = useCallback(async () => {
     if (!contact) return;
@@ -184,20 +194,35 @@ function CallTracker() {
       setOutcomeSaved(true);
       setTimeout(() => setOutcomeSaved(false), 3000);
 
+      setContact((prev) =>
+        prev ? { ...prev, call_outcome: outcome, call_occasion_count: result.occasion_count, times_called: result.times_called } : prev
+      );
+
       if (result.sms_prompt_needed) {
         setSmsDialogOpen(true);
       }
-
-      setContacts((prev) =>
-        prev.map((c) =>
-          c.id === contact.id
-            ? { ...c, call_outcome: outcome, call_occasion_count: result.occasion_count, times_called: result.times_called }
-            : c
-        )
-      );
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleNext = async () => {
+    if (outcomeRequired && !outcome) {
+      alert("Please select a call outcome before proceeding.");
+      return;
+    }
+    await claimNext();
+  };
+
+  const handleSkip = async () => {
+    if (contact) {
+      try {
+        await apiFetch(`/calls/release/${contact.id}`, { method: "POST" });
+      } catch {
+        // Ignore release errors
+      }
+    }
+    await claimNext();
   };
 
   const hasLoggedThisCall = outcomeSaved || (!outcomeRequired && calls.length > 0 && outcome !== "");
@@ -268,18 +293,6 @@ function CallTracker() {
     }
   };
 
-  const goNext = () => {
-    if (outcomeRequired && !outcome) {
-      alert("Please select a call outcome before proceeding.");
-      return;
-    }
-    if (index < contacts.length - 1) setIndex(index + 1);
-  };
-
-  const goPrev = () => {
-    if (index > 0) setIndex(index - 1);
-  };
-
   const formatOutcome = (val: string | null) => {
     const labels: Record<string, string> = {
       didnt_pick_up: "Didn't Pick Up",
@@ -290,302 +303,296 @@ function CallTracker() {
   };
 
   if (loading) {
-    return <div className="p-6 text-muted-foreground">Loading contacts...</div>;
+    return <div className="p-6 text-muted-foreground">Loading next contact...</div>;
   }
 
-  if (contacts.length === 0) {
+  if (queueEmpty || !contact) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <p className="text-muted-foreground">No contacts to call.</p>
-        <Link href="/import">
-          <Button>
-            <Upload size={14} className="mr-2" /> Import contacts
+        <p className="text-muted-foreground">No more contacts to call right now.</p>
+        <p className="text-sm text-muted-foreground">All contacts have been called or are claimed by other users.</p>
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={claimNext}>
+            Check again
           </Button>
-        </Link>
+          <Link href="/import">
+            <Button>
+              <Upload size={14} className="mr-2" /> Import contacts
+            </Button>
+          </Link>
+        </div>
       </div>
     );
   }
 
-  const atEnd = index >= contacts.length - 1;
-
   const phones: [string, string | null][] = [
-    ["Mobile", contact?.mobile_phone ?? null],
-    ["Work", contact?.work_direct_phone ?? null],
-    ["Corporate", contact?.corporate_phone ?? null],
+    ["Mobile", contact.mobile_phone ?? null],
+    ["Work", contact.work_direct_phone ?? null],
+    ["Corporate", contact.corporate_phone ?? null],
   ];
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
       {/* Navigation */}
       <div className="flex items-center justify-between mb-6">
-        <Button variant="outline" size="sm" onClick={goPrev} disabled={index === 0}>
-          <ChevronLeft size={14} className="mr-1" /> Previous
+        <Button variant="ghost" size="sm" onClick={handleSkip}>
+          <SkipForward size={14} className="mr-1" /> Skip
         </Button>
         <span className="text-sm text-muted-foreground">
-          {index + 1} of {contacts.length}
+          Assigned to you
         </span>
-        {atEnd ? (
-          <Link href="/import">
-            <Button size="sm">
-              <Upload size={14} className="mr-1" /> Import more
-            </Button>
-          </Link>
-        ) : (
-          <Button variant="outline" size="sm" onClick={goNext}>
-            Next <ChevronRight size={14} className="ml-1" />
-          </Button>
-        )}
+        <Button variant="outline" size="sm" onClick={handleNext}>
+          Next <ChevronRight size={14} className="ml-1" />
+        </Button>
       </div>
 
-      {contact && (
-        <div className="space-y-6">
-          {/* Contact Card */}
-          <div className="border border-border bg-card p-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight">
-                  {contact.first_name} {contact.last_name}
-                </h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {contact.title} at {contact.company_name}
+      <div className="space-y-6">
+        {/* Contact Card */}
+        <div className="border border-border bg-card p-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {contact.first_name} {contact.last_name}
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {contact.title} at {contact.company_name}
+              </p>
+              {contact.company_description && (
+                <p className="mt-2 text-sm text-muted-foreground/80 leading-relaxed border-l-2 border-primary/30 pl-3">
+                  {contact.company_description}
                 </p>
-                {contact.company_description && (
-                  <p className="mt-2 text-sm text-muted-foreground/80 leading-relaxed border-l-2 border-primary/30 pl-3">
-                    {contact.company_description}
-                  </p>
-                )}
-              </div>
-              <div className="text-right">
-                <p className="text-3xl font-mono font-bold">{contact.score ?? "—"}</p>
-                <Badge variant="outline" className="mt-1">
-                  {contact.company_type || "unscored"}
-                </Badge>
-              </div>
+              )}
             </div>
-
-            <Separator className="my-4" />
-
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              {contact.employees && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Employees</p>
-                  <p>{contact.employees}</p>
-                </div>
-              )}
-              {contact.city && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Location</p>
-                  <p>{contact.city}{contact.country ? `, ${contact.country}` : ""}</p>
-                </div>
-              )}
-              {contact.email && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Email</p>
-                  <p>{contact.email}</p>
-                </div>
-              )}
-              {contact.website && (
-                <div>
-                  <p className="text-xs text-muted-foreground">Website</p>
-                  <a
-                    href={contact.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline flex items-center gap-1"
-                  >
-                    {contact.website.replace(/^https?:\/\/(www\.)?/, "").slice(0, 30)}
-                    <ExternalLink size={10} />
-                  </a>
-                </div>
-              )}
-              {contact.person_linkedin_url && (
-                <div>
-                  <p className="text-xs text-muted-foreground">LinkedIn</p>
-                  <a
-                    href={contact.person_linkedin_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline flex items-center gap-1"
-                  >
-                    Profile <ExternalLink size={10} />
-                  </a>
-                </div>
-              )}
-              <div>
-                <p className="text-xs text-muted-foreground">Times called</p>
-                <p>{contact.times_called ?? 0}</p>
-              </div>
+            <div className="text-right">
+              <p className="text-3xl font-mono font-bold">{contact.score ?? "—"}</p>
+              <Badge variant="outline" className="mt-1">
+                {contact.company_type || "unscored"}
+              </Badge>
             </div>
           </div>
 
-          {/* Phone Numbers + Dialer */}
-          <div className="border border-border bg-card p-6">
-            <h2 className="text-sm font-semibold mb-3">Phone Numbers</h2>
-            <div className="space-y-2">
-              {phones.map(([label, phone]) =>
-                phone ? (
-                  <div key={label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                    <div>
-                      <p className="text-xs text-muted-foreground">{label}</p>
-                      <p className="text-sm font-mono">{phone}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleCall(phone, "browser")}
-                      >
-                        <PhoneCall size={12} className="mr-1" /> Browser
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleCall(phone, "bridge")}
-                      >
-                        <Phone size={12} className="mr-1" /> Phone
-                      </Button>
-                    </div>
-                  </div>
-                ) : null
-              )}
-              {phones.every(([, p]) => !p) && (
-                <p className="text-sm text-muted-foreground">
-                  {contact?.enrichment_status === "pending_enrichment" || contact?.enrichment_status === "enriching"
-                    ? "Phone numbers pending enrichment via Apollo..."
-                    : "No phone numbers available."}
-                </p>
-              )}
-            </div>
-            {(callStatus || activeCall) && (
-              <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-                <p className="text-sm font-medium">{callStatus}</p>
-                {activeCall && (
-                  <Button size="sm" variant="destructive" onClick={handleHangUp}>
-                    Hang up
-                  </Button>
-                )}
+          <Separator className="my-4" />
+
+          <div className="grid grid-cols-3 gap-4 text-sm">
+            {contact.employees && (
+              <div>
+                <p className="text-xs text-muted-foreground">Employees</p>
+                <p>{contact.employees}</p>
               </div>
             )}
+            {contact.city && (
+              <div>
+                <p className="text-xs text-muted-foreground">Location</p>
+                <p>{contact.city}{contact.country ? `, ${contact.country}` : ""}</p>
+              </div>
+            )}
+            {contact.email && (
+              <div>
+                <p className="text-xs text-muted-foreground">Email</p>
+                <p>{contact.email}</p>
+              </div>
+            )}
+            {contact.website && (
+              <div>
+                <p className="text-xs text-muted-foreground">Website</p>
+                <a
+                  href={contact.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline flex items-center gap-1"
+                >
+                  {contact.website.replace(/^https?:\/\/(www\.)?/, "").slice(0, 30)}
+                  <ExternalLink size={10} />
+                </a>
+              </div>
+            )}
+            {contact.person_linkedin_url && (
+              <div>
+                <p className="text-xs text-muted-foreground">LinkedIn</p>
+                <a
+                  href={contact.person_linkedin_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline flex items-center gap-1"
+                >
+                  Profile <ExternalLink size={10} />
+                </a>
+              </div>
+            )}
+            <div>
+              <p className="text-xs text-muted-foreground">Times called</p>
+              <p>{contact.times_called ?? 0}</p>
+            </div>
           </div>
+        </div>
 
-          {/* Call Outcome */}
-          <div className="border border-border bg-card p-6">
-            <h2 className="text-sm font-semibold mb-3">Call Outcome</h2>
-            <div className="flex items-center gap-3">
-              <Select value={outcome} onValueChange={setOutcome}>
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue placeholder="Select outcome..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="didnt_pick_up">Didn&apos;t Pick Up</SelectItem>
-                  <SelectItem value="not_interested">Not Interested</SelectItem>
-                  <SelectItem value="interested">Interested</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button onClick={handleLogCall} disabled={!outcome || hasLoggedThisCall}>
-                {hasLoggedThisCall ? "Outcome Saved" : "Save Outcome"}
-              </Button>
-              {outcomeSaved && (
-                <span className="flex items-center gap-1 text-sm text-green-600">
-                  <CheckCircle size={14} /> Saved
-                </span>
+        {/* Phone Numbers + Dialer */}
+        <div className="border border-border bg-card p-6">
+          <h2 className="text-sm font-semibold mb-3">Phone Numbers</h2>
+          <div className="space-y-2">
+            {phones.map(([label, phone]) =>
+              phone ? (
+                <div key={label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                  <div>
+                    <p className="text-xs text-muted-foreground">{label}</p>
+                    <p className="text-sm font-mono">{phone}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleCall(phone, "browser")}
+                    >
+                      <PhoneCall size={12} className="mr-1" /> Browser
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleCall(phone, "bridge")}
+                    >
+                      <Phone size={12} className="mr-1" /> Phone
+                    </Button>
+                  </div>
+                </div>
+              ) : null
+            )}
+            {phones.every(([, p]) => !p) && (
+              <p className="text-sm text-muted-foreground">
+                {contact.enrichment_status === "pending_enrichment" || contact.enrichment_status === "enriching"
+                  ? "Phone numbers pending enrichment via Apollo..."
+                  : "No phone numbers available."}
+              </p>
+            )}
+          </div>
+          {(callStatus || activeCall) && (
+            <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+              <p className="text-sm font-medium">{callStatus}</p>
+              {activeCall && (
+                <Button size="sm" variant="destructive" onClick={handleHangUp}>
+                  Hang up
+                </Button>
               )}
             </div>
-          </div>
+          )}
+        </div>
 
-          {/* Notes */}
-          <div className="border border-border bg-card p-6">
-            <h2 className="text-sm font-semibold mb-3">Notes</h2>
-            <div className="flex gap-2 mb-4">
-              <Textarea
-                value={newNote}
-                onChange={(e) => setNewNote(e.target.value)}
-                placeholder="Write a note..."
-                className="min-h-[60px]"
-              />
-              <Button onClick={handleAddNote} disabled={!newNote.trim()} className="self-end">
-                <Plus size={14} />
-              </Button>
-            </div>
-            <div className="space-y-2">
-              {notes.map((note) => (
-                <div key={note.id} className="border border-border p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-xs text-muted-foreground">{note.note_date}</p>
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => {
-                          setEditingNote(note.id);
-                          setEditContent(note.content);
-                        }}
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <Pencil size={12} />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteNote(note.id)}
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
+        {/* Call Outcome */}
+        <div className="border border-border bg-card p-6">
+          <h2 className="text-sm font-semibold mb-3">Call Outcome</h2>
+          <div className="flex items-center gap-3">
+            <Select value={outcome} onValueChange={setOutcome}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Select outcome..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="didnt_pick_up">Didn&apos;t Pick Up</SelectItem>
+                <SelectItem value="not_interested">Not Interested</SelectItem>
+                <SelectItem value="interested">Interested</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={handleLogCall} disabled={!outcome || hasLoggedThisCall}>
+              {hasLoggedThisCall ? "Outcome Saved" : "Save Outcome"}
+            </Button>
+            {outcomeSaved && (
+              <span className="flex items-center gap-1 text-sm text-green-600">
+                <CheckCircle size={14} /> Saved
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Notes */}
+        <div className="border border-border bg-card p-6">
+          <h2 className="text-sm font-semibold mb-3">Notes</h2>
+          <div className="flex gap-2 mb-4">
+            <Textarea
+              value={newNote}
+              onChange={(e) => setNewNote(e.target.value)}
+              placeholder="Write a note..."
+              className="min-h-[60px]"
+            />
+            <Button onClick={handleAddNote} disabled={!newNote.trim()} className="self-end">
+              <Plus size={14} />
+            </Button>
+          </div>
+          <div className="space-y-2">
+            {notes.map((note) => (
+              <div key={note.id} className="border border-border p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs text-muted-foreground">{note.note_date}</p>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => {
+                        setEditingNote(note.id);
+                        setEditContent(note.content);
+                      }}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <Pencil size={12} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteNote(note.id)}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </div>
-                  {editingNote === note.id ? (
-                    <div className="flex gap-2">
-                      <Textarea
-                        value={editContent}
-                        onChange={(e) => setEditContent(e.target.value)}
-                        className="min-h-[40px]"
-                      />
-                      <Button
-                        size="sm"
-                        onClick={() => handleUpdateNote(note.id)}
-                      >
-                        Save
-                      </Button>
-                    </div>
-                  ) : (
-                    <p className="text-sm">{note.content}</p>
-                  )}
+                </div>
+                {editingNote === note.id ? (
+                  <div className="flex gap-2">
+                    <Textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      className="min-h-[40px]"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => handleUpdateNote(note.id)}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-sm">{note.content}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Call History */}
+        {calls.length > 0 && (
+          <div className="border border-border bg-card p-6">
+            <h2 className="text-sm font-semibold mb-3">Call History</h2>
+            <div className="space-y-2">
+              {calls.map((call) => (
+                <div
+                  key={call.id}
+                  className="flex items-center justify-between py-2 border-b border-border last:border-0 text-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-muted-foreground">{call.call_date}</span>
+                    <Badge variant="secondary" className="capitalize">
+                      {call.call_method === "browser" ? "Browser Call" : "Phone Call"}
+                    </Badge>
+                  </div>
+                  <Badge
+                    variant={
+                      call.outcome === "interested"
+                        ? "default"
+                        : call.outcome === "not_interested"
+                        ? "destructive"
+                        : "outline"
+                    }
+                  >
+                    {formatOutcome(call.outcome)}
+                  </Badge>
                 </div>
               ))}
             </div>
           </div>
-
-          {/* Call History */}
-          {calls.length > 0 && (
-            <div className="border border-border bg-card p-6">
-              <h2 className="text-sm font-semibold mb-3">Call History</h2>
-              <div className="space-y-2">
-                {calls.map((call) => (
-                  <div
-                    key={call.id}
-                    className="flex items-center justify-between py-2 border-b border-border last:border-0 text-sm"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-muted-foreground">{call.call_date}</span>
-                      <Badge variant="secondary" className="capitalize">
-                        {call.call_method === "browser" ? "Browser Call" : "Phone Call"}
-                      </Badge>
-                    </div>
-                    <Badge
-                      variant={
-                        call.outcome === "interested"
-                          ? "default"
-                          : call.outcome === "not_interested"
-                          ? "destructive"
-                          : "outline"
-                      }
-                    >
-                      {formatOutcome(call.outcome)}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
       {/* SMS Dialog */}
       <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
