@@ -11,6 +11,7 @@ export interface Contact {
   city: string | null;
   state: string | null;
   country: string | null;
+  timezone: string | null;
   email: string | null;
   mobile_phone: string | null;
   work_direct_phone: string | null;

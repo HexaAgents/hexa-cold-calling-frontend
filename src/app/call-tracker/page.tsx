@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef, type Dispatch, type SetStateAction } from "react";
 import AuthGuard from "@/components/layout/auth-guard";
 import AppSidebar from "@/components/layout/app-sidebar";
 import { apiFetch } from "@/lib/api";
@@ -43,10 +43,10 @@ import {
   Pencil,
   Trash2,
   CheckCircle,
-  SkipForward,
   Filter,
-  History,
   ArrowLeft,
+  Copy,
+  Check,
 } from "lucide-react";
 import type { Contact, Note, CallLog, CallLogResponse } from "@/types";
 import Link from "next/link";
@@ -75,36 +75,46 @@ interface LocationOptions {
 }
 
 function CallTracker() {
-  const [contact, setContact] = useState<Contact | null>(null);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [calls, setCalls] = useState<CallLog[]>([]);
-  const [outcome, setOutcome] = useState<string>("");
+  // Persisted across navigation so the user returns to where they left off.
+  const [contact, setContact] = usePersistedState<Contact | null>("callTracker:contact", null);
+  const [notes, setNotes] = usePersistedState<Note[]>("callTracker:notes", []);
+  const [calls, setCalls] = usePersistedState<CallLog[]>("callTracker:calls", []);
+  const [outcome, setOutcome] = usePersistedState<string>("callTracker:outcome", "");
+  const [outcomeRequired, setOutcomeRequired] = usePersistedState<boolean>("callTracker:outcomeRequired", false);
+  const [outcomeSaved, setOutcomeSaved] = usePersistedState<boolean>("callTracker:outcomeSaved", false);
+  const [started, setStarted] = usePersistedState<boolean>("callTracker:started", false);
+  const [filterCities, setFilterCities] = usePersistedState<string[]>("callTracker:filterCities", []);
+  const [filterStates, setFilterStates] = usePersistedState<string[]>("callTracker:filterStates", []);
+  const [filterCountries, setFilterCountries] = usePersistedState<string[]>("callTracker:filterCountries", []);
+  const [filterBusinessHours, setFilterBusinessHours] = usePersistedState<boolean>("callTracker:filterBusinessHours", false);
+  const [sessionHistory, setSessionHistory] = usePersistedState<Contact[]>("callTracker:sessionHistory", []);
+  // null = viewing the current (just-claimed) contact.
+  // 0..n  = viewing an older contact. 0 is the most recently visited previous contact.
+  const [historyIndex, setHistoryIndex] = usePersistedState<number | null>("callTracker:historyIndex", null);
+
+  // Transient UI/session state — intentionally not persisted.
   const [newNote, setNewNote] = useState("");
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
   const [scheduledDate, setScheduledDate] = useState("");
   const [loading, setLoading] = useState(false);
-  const [outcomeRequired, setOutcomeRequired] = useState(false);
   const [twilioDevice, setTwilioDevice] = useState<Device | null>(null);
   const [activeCall, setActiveCall] = useState<Call | null>(null);
   const [callStatus, setCallStatus] = useState<string>("");
-  const [outcomeSaved, setOutcomeSaved] = useState(false);
   const [outcomeDialogOpen, setOutcomeDialogOpen] = useState(false);
   const [queueEmpty, setQueueEmpty] = useState(false);
+  const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
 
   const [locations, setLocations] = useState<LocationOptions>({ cities: [], states: [], countries: [] });
-  const [filterCities, setFilterCities] = useState<string[]>([]);
-  const [filterStates, setFilterStates] = useState<string[]>([]);
-  const [filterCountries, setFilterCountries] = useState<string[]>([]);
-  const [started, setStarted] = useState(false);
   const [loadingLocations, setLoadingLocations] = useState(true);
 
-  const [sessionHistory, setSessionHistory] = useState<Contact[]>([]);
-  const [viewingHistoryContact, setViewingHistoryContact] = useState<Contact | null>(null);
-
+  const viewingHistoryContact =
+    historyIndex !== null ? sessionHistory[sessionHistory.length - 1 - historyIndex] ?? null : null;
   const displayContact = viewingHistoryContact ?? contact;
   const isViewingHistory = viewingHistoryContact !== null;
+  const canGoBack =
+    historyIndex === null ? sessionHistory.length > 0 : historyIndex < sessionHistory.length - 1;
 
   useEffect(() => {
     apiFetch<LocationOptions>("/contacts/locations")
@@ -118,12 +128,13 @@ function CallTracker() {
     filterCities.forEach((v) => params.append("cities", v));
     filterStates.forEach((v) => params.append("states", v));
     filterCountries.forEach((v) => params.append("countries", v));
+    if (filterBusinessHours) params.append("business_hours_only", "true");
     const qs = params.toString();
     return qs ? `?${qs}` : "";
-  }, [filterCities, filterStates, filterCountries]);
+  }, [filterCities, filterStates, filterCountries, filterBusinessHours]);
 
   const claimNext = useCallback(async () => {
-    setViewingHistoryContact(null);
+    setHistoryIndex(null);
     setLoading(true);
     setOutcome("");
     setOutcomeSaved(false);
@@ -159,52 +170,58 @@ function CallTracker() {
     await claimNext();
   };
 
-  const fetchContactData = useCallback(async () => {
-    if (!contact) return;
-    setOutcome(contact.call_outcome || "");
-    setOutcomeRequired(false);
-    const [n, c] = await Promise.all([
-      apiFetch<Note[]>(`/contacts/${contact.id}/notes`).catch(() => []),
-      apiFetch<CallLog[]>(`/calls/contact/${contact.id}`).catch(() => []),
-    ]);
-    setNotes(n);
-    setCalls(c);
-  }, [contact]);
-
+  // Keeps notes/calls/outcome in sync with whichever contact is currently on screen
+  // (claimed or a history contact). Resets per-contact UI state only when the
+  // displayed contact actually changes — not on mount — so restored state survives.
+  const displayContactId = displayContact?.id ?? null;
+  const prevDisplayIdRef = useRef<string | null>(displayContactId);
   useEffect(() => {
-    fetchContactData();
-  }, [fetchContactData]);
+    if (!displayContactId || !displayContact) return;
 
-  const viewHistoryContact = async (historyContact: Contact) => {
+    const idChanged = prevDisplayIdRef.current !== displayContactId;
+    prevDisplayIdRef.current = displayContactId;
+
+    if (idChanged) {
+      setOutcome(displayContact.call_outcome || "");
+      setOutcomeSaved(false);
+      setOutcomeRequired(false);
+      setNewNote("");
+      setEditingNote(null);
+    }
+
+    let cancelled = false;
+    (async () => {
+      const [n, c] = await Promise.all([
+        apiFetch<Note[]>(`/contacts/${displayContactId}/notes`).catch(() => []),
+        apiFetch<CallLog[]>(`/calls/contact/${displayContactId}`).catch(() => []),
+      ]);
+      if (cancelled) return;
+      setNotes(n);
+      setCalls(c);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Only re-run when the displayed contact id changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayContactId]);
+
+  const handleBack = () => {
+    if (!canGoBack) return;
     setOutcomeDialogOpen(false);
-    setViewingHistoryContact(historyContact);
-    setOutcome(historyContact.call_outcome || "");
-    setOutcomeSaved(false);
-    setOutcomeRequired(false);
-    setNewNote("");
-    setEditingNote(null);
-    const [n, c] = await Promise.all([
-      apiFetch<Note[]>(`/contacts/${historyContact.id}/notes`).catch(() => []),
-      apiFetch<CallLog[]>(`/calls/contact/${historyContact.id}`).catch(() => []),
-    ]);
-    setNotes(n);
-    setCalls(c);
+    const nextIndex = historyIndex === null ? 0 : historyIndex + 1;
+    const target = sessionHistory[sessionHistory.length - 1 - nextIndex];
+    if (!target) return;
+    setHistoryIndex(nextIndex);
   };
 
-  const returnToCurrentContact = async () => {
-    setViewingHistoryContact(null);
-    setNewNote("");
-    setEditingNote(null);
-    if (!contact) return;
-    setOutcome(contact.call_outcome || "");
-    setOutcomeSaved(false);
-    setOutcomeRequired(false);
-    const [n, c] = await Promise.all([
-      apiFetch<Note[]>(`/contacts/${contact.id}/notes`).catch(() => []),
-      apiFetch<CallLog[]>(`/calls/contact/${contact.id}`).catch(() => []),
-    ]);
-    setNotes(n);
-    setCalls(c);
+  const handleForward = () => {
+    if (historyIndex === null) return;
+    if (historyIndex === 0) {
+      setHistoryIndex(null);
+      return;
+    }
+    setHistoryIndex(historyIndex - 1);
   };
 
   const initTwilioDevice = async (): Promise<Device> => {
@@ -261,6 +278,16 @@ function CallTracker() {
     }
   };
 
+  const handleCopyPhone = async (phone: string) => {
+    try {
+      await navigator.clipboard.writeText(phone);
+      setCopiedPhone(phone);
+      setTimeout(() => setCopiedPhone((current) => (current === phone ? null : current)), 2000);
+    } catch (err) {
+      console.error("Failed to copy phone number", err);
+    }
+  };
+
   const handleLogCall = async () => {
     if (!displayContact || !outcome) return;
     try {
@@ -280,9 +307,6 @@ function CallTracker() {
       setTimeout(() => setOutcomeSaved(false), 3000);
 
       if (isViewingHistory) {
-        setViewingHistoryContact((prev) =>
-          prev ? { ...prev, call_outcome: outcome, call_occasion_count: result.occasion_count, times_called: result.times_called } : prev
-        );
         setSessionHistory((prev) =>
           prev.map((c) =>
             c.id === displayContact.id
@@ -308,17 +332,6 @@ function CallTracker() {
     if (outcomeRequired && !outcome) {
       alert("Please select a call outcome before proceeding.");
       return;
-    }
-    await claimNext();
-  };
-
-  const handleSkip = async () => {
-    if (contact) {
-      try {
-        await apiFetch(`/calls/release/${contact.id}`, { method: "POST" });
-      } catch {
-        // Ignore release errors
-      }
     }
     await claimNext();
   };
@@ -461,6 +474,22 @@ function CallTracker() {
             </div>
           )}
 
+          <label className="flex items-start gap-2 text-sm cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={filterBusinessHours}
+              onChange={(e) => setFilterBusinessHours(e.target.checked)}
+              className="mt-0.5 h-4 w-4 accent-primary cursor-pointer"
+            />
+            <span className="flex items-center gap-1.5">
+              <Clock size={14} className="text-muted-foreground" />
+              <span>
+                Only contacts in business hours now
+                <span className="text-muted-foreground"> (8am&ndash;12pm, 2pm&ndash;6pm local)</span>
+              </span>
+            </span>
+          </label>
+
           <Button className="w-full" onClick={handleStartCalling}>
             Start Calling
           </Button>
@@ -492,28 +521,9 @@ function CallTracker() {
           </Link>
         </div>
         {sessionHistory.length > 0 && (
-          <div className="mt-2 border border-border bg-card p-4 w-full max-w-lg">
-            <div className="flex items-center gap-2 mb-3">
-              <History size={14} className="text-muted-foreground" />
-              <span className="text-xs font-medium text-muted-foreground">Previous Contacts</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {sessionHistory.map((h) => (
-                <button
-                  key={h.id}
-                  onClick={() => viewHistoryContact(h)}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs border border-border rounded-md hover:bg-muted transition-colors"
-                >
-                  <span>{h.first_name} {h.last_name}</span>
-                  {h.call_outcome && (
-                    <Badge variant="outline" className="text-[10px] px-1 py-0">
-                      {formatOutcome(h.call_outcome)}
-                    </Badge>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
+          <Button variant="outline" onClick={handleBack}>
+            <ArrowLeft size={14} className="mr-1" /> Back to previous contact
+          </Button>
         )}
       </div>
     );
@@ -530,75 +540,44 @@ function CallTracker() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       {/* Active filters indicator */}
-      {(filterCities.length > 0 || filterStates.length > 0 || filterCountries.length > 0) && (
+      {(filterCities.length > 0 || filterStates.length > 0 || filterCountries.length > 0 || filterBusinessHours) && (
         <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground flex-wrap">
           <Filter size={12} />
           {[...filterCountries, ...filterStates, ...filterCities].map((v) => (
             <Badge key={v} variant="secondary" className="text-xs">{v}</Badge>
           ))}
+          {filterBusinessHours && (
+            <Badge variant="secondary" className="text-xs gap-1">
+              <Clock size={10} /> Business hours
+            </Badge>
+          )}
           <button onClick={() => setStarted(false)} className="text-primary hover:underline ml-1">Change</button>
         </div>
       )}
 
-      {/* Session History */}
-      {sessionHistory.length > 0 && (
-        <div className="mb-4 border border-border bg-card p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <History size={14} className="text-muted-foreground" />
-            <span className="text-xs font-medium text-muted-foreground">Previous Contacts</span>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {sessionHistory.map((h) => (
-              <button
-                key={h.id}
-                onClick={() => viewHistoryContact(h)}
-                disabled={!!activeCall}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs border rounded-md transition-colors ${
-                  viewingHistoryContact?.id === h.id
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border hover:bg-muted"
-                } ${activeCall ? "opacity-50 cursor-not-allowed" : ""}`}
-              >
-                <span>{h.first_name} {h.last_name}</span>
-                {h.call_outcome && (
-                  <Badge variant="outline" className="text-[10px] px-1 py-0">
-                    {formatOutcome(h.call_outcome)}
-                  </Badge>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Viewing history banner */}
-      {isViewingHistory && (
-        <div className="mb-4 flex items-center justify-between border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-3">
-          <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
-            <History size={14} />
-            <span>Viewing previous contact — calling is disabled</span>
-          </div>
-          <Button size="sm" variant="outline" onClick={returnToCurrentContact}>
-            <ArrowLeft size={14} className="mr-1" />
-            {contact ? "Return to current contact" : "Back to queue"}
-          </Button>
-        </div>
-      )}
-
       {/* Navigation */}
-      {!isViewingHistory && (
-        <div className="flex items-center justify-between mb-6">
-          <Button variant="ghost" size="sm" onClick={handleSkip}>
-            <SkipForward size={14} className="mr-1" /> Skip
+      <div className="flex items-center justify-between mb-6">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleBack}
+          disabled={!canGoBack || !!activeCall}
+        >
+          <ArrowLeft size={14} className="mr-1" /> Back
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          {isViewingHistory ? "Viewing previous contact — calling disabled" : "Assigned to you"}
+        </span>
+        {isViewingHistory ? (
+          <Button variant="outline" size="sm" onClick={handleForward}>
+            {historyIndex === 0 ? "Current" : "Forward"} <ChevronRight size={14} className="ml-1" />
           </Button>
-          <span className="text-sm text-muted-foreground">
-            Assigned to you
-          </span>
+        ) : (
           <Button variant="outline" size="sm" onClick={handleNext}>
             Next <ChevronRight size={14} className="ml-1" />
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="space-y-6">
         {/* Contact Card */}
@@ -648,6 +627,12 @@ function CallTracker() {
               <div>
                 <p className="text-xs text-muted-foreground">Location</p>
                 <p>{[displayContact.city, displayContact.state, displayContact.country].filter(Boolean).join(", ")}</p>
+                {displayContact.timezone && (
+                  <p className="mt-0.5 text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock size={10} />
+                    <LocalTime timezone={displayContact.timezone} />
+                  </p>
+                )}
               </div>
             )}
             {displayContact.email && (
@@ -699,7 +684,23 @@ function CallTracker() {
                 <div key={label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                   <div>
                     <p className="text-xs text-muted-foreground">{label}</p>
-                    <p className="text-sm font-mono">{phone}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-mono">{phone}</p>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={() => handleCopyPhone(phone)}
+                        aria-label={`Copy ${label} phone number`}
+                        title={copiedPhone === phone ? "Copied!" : "Copy phone number"}
+                      >
+                        {copiedPhone === phone ? (
+                          <Check size={12} className="text-green-600" />
+                        ) : (
+                          <Copy size={12} />
+                        )}
+                      </Button>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <Button
@@ -932,6 +933,38 @@ function CallTracker() {
   );
 }
 
+function LocalTime({ timezone }: { timezone: string }) {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  let formatted: string;
+  try {
+    formatted = now.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: timezone,
+      timeZoneName: "short",
+    });
+  } catch {
+    return null;
+  }
+
+  const hour = Number(
+    new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: timezone }).format(now)
+  );
+  const inBusinessHours = (hour >= 8 && hour < 12) || (hour >= 14 && hour < 18);
+
+  return (
+    <span className={inBusinessHours ? "text-green-600 dark:text-green-400" : undefined}>
+      {formatted} local
+    </span>
+  );
+}
+
 function LocationMultiSelect({
   label,
   options,
@@ -989,4 +1022,31 @@ function LocationMultiSelect({
       </DropdownMenu>
     </div>
   );
+}
+
+// Session-scoped persisted state. Values survive in-tab navigation (route changes,
+// back/forward) but reset when the tab/window closes. Safe here because the
+// CallTracker tree is gated behind AuthGuard and never renders during SSR.
+function usePersistedState<T>(
+  key: string,
+  initialValue: T,
+): readonly [T, Dispatch<SetStateAction<T>>] {
+  const [value, setValue] = useState<T>(() => {
+    if (typeof window === "undefined") return initialValue;
+    try {
+      const stored = window.sessionStorage.getItem(key);
+      return stored !== null ? (JSON.parse(stored) as T) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.sessionStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // Storage quota exceeded or disabled — silently ignore.
+    }
+  }, [key, value]);
+  return [value, setValue] as const;
 }
