@@ -77,6 +77,7 @@ function ImportContent() {
           stored_rows: 0,
           discarded_rows: 0,
           enriched_rows: 0,
+          enrichment_error: null,
           status: "processing",
           created_at: new Date().toISOString(),
         },
