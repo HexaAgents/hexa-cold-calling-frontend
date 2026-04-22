@@ -16,6 +16,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -85,9 +92,9 @@ function CallTracker() {
   const [queueEmpty, setQueueEmpty] = useState(false);
 
   const [locations, setLocations] = useState<LocationOptions>({ cities: [], states: [], countries: [] });
-  const [filterCity, setFilterCity] = useState("");
-  const [filterState, setFilterState] = useState("");
-  const [filterCountry, setFilterCountry] = useState("");
+  const [filterCities, setFilterCities] = useState<string[]>([]);
+  const [filterStates, setFilterStates] = useState<string[]>([]);
+  const [filterCountries, setFilterCountries] = useState<string[]>([]);
   const [started, setStarted] = useState(false);
   const [loadingLocations, setLoadingLocations] = useState(true);
 
@@ -100,12 +107,12 @@ function CallTracker() {
 
   const buildFilterQuery = useCallback(() => {
     const params = new URLSearchParams();
-    if (filterCity) params.set("city", filterCity);
-    if (filterState) params.set("state", filterState);
-    if (filterCountry) params.set("country", filterCountry);
+    filterCities.forEach((v) => params.append("cities", v));
+    filterStates.forEach((v) => params.append("states", v));
+    filterCountries.forEach((v) => params.append("countries", v));
     const qs = params.toString();
     return qs ? `?${qs}` : "";
-  }, [filterCity, filterState, filterCountry]);
+  }, [filterCities, filterStates, filterCountries]);
 
   const claimNext = useCallback(async () => {
     setLoading(true);
@@ -346,37 +353,52 @@ function CallTracker() {
         </p>
         <div className="border border-border bg-card p-6 space-y-4">
           <div className="grid grid-cols-3 gap-3">
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">Country</p>
-              <Select value={filterCountry || "_all"} onValueChange={(v) => setFilterCountry(v === "_all" ? "" : v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_all">All</SelectItem>
-                  {locations.countries.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">State</p>
-              <Select value={filterState || "_all"} onValueChange={(v) => setFilterState(v === "_all" ? "" : v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_all">All</SelectItem>
-                  {locations.states.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-1">City</p>
-              <Select value={filterCity || "_all"} onValueChange={(v) => setFilterCity(v === "_all" ? "" : v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_all">All</SelectItem>
-                  {locations.cities.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            <LocationMultiSelect
+              label="Country"
+              options={locations.countries}
+              selected={filterCountries}
+              setSelected={setFilterCountries}
+            />
+            <LocationMultiSelect
+              label="State"
+              options={locations.states}
+              selected={filterStates}
+              setSelected={setFilterStates}
+            />
+            <LocationMultiSelect
+              label="City"
+              options={locations.cities}
+              selected={filterCities}
+              setSelected={setFilterCities}
+            />
           </div>
+
+          {(filterCities.length > 0 || filterStates.length > 0 || filterCountries.length > 0) && (
+            <div className="flex flex-wrap gap-1.5">
+              {[...filterCountries, ...filterStates, ...filterCities].map((v) => (
+                <Badge key={v} variant="secondary" className="text-xs gap-1">
+                  {v}
+                  <button
+                    onClick={() => {
+                      setFilterCountries((p) => p.filter((x) => x !== v));
+                      setFilterStates((p) => p.filter((x) => x !== v));
+                      setFilterCities((p) => p.filter((x) => x !== v));
+                    }}
+                    className="ml-0.5 hover:text-foreground"
+                  >
+                    &times;
+                  </button>
+                </Badge>
+              ))}
+              <button
+                onClick={() => { setFilterCountries([]); setFilterStates([]); setFilterCities([]); }}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+
           <Button className="w-full" onClick={handleStartCalling}>
             Start Calling
           </Button>
@@ -420,10 +442,12 @@ function CallTracker() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       {/* Active filters indicator */}
-      {(filterCity || filterState || filterCountry) && (
-        <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground">
+      {(filterCities.length > 0 || filterStates.length > 0 || filterCountries.length > 0) && (
+        <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground flex-wrap">
           <Filter size={12} />
-          <span>Filtering: {[filterCountry, filterState, filterCity].filter(Boolean).join(" / ")}</span>
+          {[...filterCountries, ...filterStates, ...filterCities].map((v) => (
+            <Badge key={v} variant="secondary" className="text-xs">{v}</Badge>
+          ))}
           <button onClick={() => setStarted(false)} className="text-primary hover:underline ml-1">Change</button>
         </div>
       )}
@@ -444,6 +468,16 @@ function CallTracker() {
       <div className="space-y-6">
         {/* Contact Card */}
         <div className="border border-border bg-card p-6">
+          {contact.times_called > 0 && (
+            <div className="flex items-center gap-2 mb-3">
+              <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700">
+                Callback
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                Called {contact.times_called} time{contact.times_called !== 1 ? "s" : ""} previously
+              </span>
+            </div>
+          )}
           <div className="flex items-start justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
@@ -757,6 +791,65 @@ function CallTracker() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function LocationMultiSelect({
+  label,
+  options,
+  selected,
+  setSelected,
+}: {
+  label: string;
+  options: string[];
+  selected: string[];
+  setSelected: (v: string[]) => void;
+}) {
+  const allSelected = options.length > 0 && selected.length === options.length;
+
+  const toggle = (value: string) => {
+    setSelected(
+      selected.includes(value)
+        ? selected.filter((v) => v !== value)
+        : [...selected, value]
+    );
+  };
+
+  const toggleAll = () => {
+    setSelected(allSelected ? [] : [...options]);
+  };
+
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground mb-1">{label}</p>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="w-full justify-between text-sm font-normal">
+            {selected.length === 0
+              ? "All"
+              : selected.length === 1
+                ? selected[0]
+                : `${selected.length} selected`}
+            <ChevronRight size={14} className="rotate-90 ml-auto opacity-50" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-56 max-h-64 overflow-y-auto">
+          <DropdownMenuCheckboxItem checked={allSelected} onCheckedChange={toggleAll}>
+            Select all
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuSeparator />
+          {options.map((opt) => (
+            <DropdownMenuCheckboxItem
+              key={opt}
+              checked={selected.includes(opt)}
+              onCheckedChange={() => toggle(opt)}
+            >
+              {opt}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

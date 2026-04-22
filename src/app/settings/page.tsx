@@ -31,6 +31,7 @@ export default function SettingsPage() {
 function SettingsContent() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [threshold, setThreshold] = useState(3);
+  const [retryDays, setRetryDays] = useState(3);
   const [template, setTemplate] = useState("");
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -45,6 +46,7 @@ function SettingsContent() {
       .then((s) => {
         setSettings(s);
         setThreshold(s.sms_call_threshold);
+        setRetryDays(s.retry_days);
         setTemplate(s.sms_template);
       })
       .catch(console.error)
@@ -57,6 +59,7 @@ function SettingsContent() {
         method: "PUT",
         body: JSON.stringify({
           sms_call_threshold: threshold,
+          retry_days: retryDays,
           sms_template: template,
         }),
       });
@@ -126,6 +129,23 @@ function SettingsContent() {
           <p className="text-xs text-muted-foreground">
             After this many separate-day call attempts, the platform will prompt
             you to send an SMS.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="retryDays">Retry &quot;didn&apos;t pick up&quot; after N days</Label>
+          <Input
+            id="retryDays"
+            type="number"
+            min={1}
+            max={90}
+            value={retryDays}
+            onChange={(e) => setRetryDays(parseInt(e.target.value) || 1)}
+            className="w-24"
+          />
+          <p className="text-xs text-muted-foreground">
+            Contacts who didn&apos;t pick up will reappear in the same caller&apos;s
+            queue after this many days.
           </p>
         </div>
 

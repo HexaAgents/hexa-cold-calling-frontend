@@ -73,6 +73,7 @@ export interface Settings {
   id: string;
   sms_call_threshold: number;
   sms_template: string;
+  retry_days: number;
 }
 
 export interface ImportBatch {
