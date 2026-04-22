@@ -18,6 +18,7 @@ describe("AppSidebar", () => {
     render(<AppSidebar user={testUser} />);
     expect(screen.getByText("Contacts")).toBeInTheDocument();
     expect(screen.getByText("Call Tracker")).toBeInTheDocument();
+    expect(screen.getByText("Productivity")).toBeInTheDocument();
     expect(screen.getByText("Import")).toBeInTheDocument();
     expect(screen.getByText("Settings")).toBeInTheDocument();
   });
