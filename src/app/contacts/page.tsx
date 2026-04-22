@@ -62,6 +62,7 @@ function ContactsContent() {
   const [loading, setLoading] = useState(true);
   const [enrichmentCounts, setEnrichmentCounts] = useState<Record<string, number>>({});
   const [enriching, setEnriching] = useState(false);
+  const [creditError, setCreditError] = useState(false);
 
   const fetchContacts = useCallback(async () => {
     setLoading(true);
@@ -102,23 +103,32 @@ function ContactsContent() {
 
   const handleEnrichAll = async () => {
     setEnriching(true);
+    setCreditError(false);
     try {
       await apiFetch("/apollo/enrich", {
         method: "POST",
         body: JSON.stringify({ enrich_all: true }),
       });
+      let prevPending = enrichmentCounts.pending_enrichment ?? 0;
       const poll = setInterval(async () => {
         const data = await apiFetch<Record<string, number>>("/apollo/enrich/status");
         setEnrichmentCounts(data);
-        if ((data.pending_enrichment || 0) === 0 && (data.enriching || 0) === 0) {
+        const pending = data.pending_enrichment || 0;
+        const enrichingNow = data.enriching || 0;
+        if (enrichingNow === 0) {
           clearInterval(poll);
           setEnriching(false);
+          if (pending > 0 && pending >= prevPending) {
+            setCreditError(true);
+          }
           fetchContacts();
         }
+        prevPending = pending;
       }, 5000);
     } catch (err) {
       console.error("Enrichment failed:", err);
       setEnriching(false);
+      setCreditError(true);
     }
   };
 
@@ -171,11 +181,22 @@ function ContactsContent() {
       </div>
 
       {(enrichmentCounts.pending_enrichment ?? 0) > 0 && (
-        <div className="mb-4 flex items-center justify-between border border-border bg-muted/40 p-4">
-          <p className="text-sm">
-            {enrichmentCounts.pending_enrichment} contacts need phone numbers.
-            {enrichmentCounts.enriching ? ` ${enrichmentCounts.enriching} enriching...` : ""}
-          </p>
+        <div className={`mb-4 flex items-center justify-between border p-4 ${
+          creditError
+            ? "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30"
+            : "border-border bg-muted/40"
+        }`}>
+          <div>
+            <p className="text-sm">
+              {enrichmentCounts.pending_enrichment} contacts need phone numbers.
+              {enrichmentCounts.enriching ? ` ${enrichmentCounts.enriching} enriching...` : ""}
+            </p>
+            {creditError && (
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                Apollo credits exhausted. Add credits to your Apollo account to continue enrichment.
+              </p>
+            )}
+          </div>
           <Button
             size="sm"
             onClick={handleEnrichAll}

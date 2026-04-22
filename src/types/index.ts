@@ -85,6 +85,7 @@ export interface ImportBatch {
   stored_rows: number;
   discarded_rows: number;
   enriched_rows: number;
+  enrichment_error: string | null;
   status: string;
   created_at: string | null;
 }

@@ -193,6 +193,13 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
           ? `Complete — ${batch.stored_rows} stored, ${batch.discarded_rows} discarded${enriched > 0 ? `, ${enriched} enriched` : ""}`
           : `${batch.stored_rows} stored · ${batch.discarded_rows} discarded${enriched > 0 ? ` · ${enriched} enriching` : ""}`}
       </p>
+
+      {batch.enrichment_error && (
+        <div className="mt-2 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-2">
+          <AlertCircle size={12} />
+          <span>{batch.enrichment_error} — contacts saved as pending. Add credits and re-import to retry.</span>
+        </div>
+      )}
     </div>
   );
 }
