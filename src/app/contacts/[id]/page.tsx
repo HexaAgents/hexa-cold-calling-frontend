@@ -8,8 +8,16 @@ import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Trash2, ExternalLink } from "lucide-react";
-import type { Contact, Note, CallLog } from "@/types";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ArrowLeft, Trash2, ExternalLink, Plus, Pencil, CheckCircle } from "lucide-react";
+import type { Contact, Note, CallLog, CallLogResponse } from "@/types";
 
 export default function ContactDetailPage() {
   return (
@@ -33,10 +41,18 @@ function ContactDetail() {
   const [contact, setContact] = useState<Contact | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [calls, setCalls] = useState<CallLog[]>([]);
+  const [outcome, setOutcome] = useState<string>("");
+  const [outcomeSaved, setOutcomeSaved] = useState(false);
+  const [newNote, setNewNote] = useState("");
+  const [editingNote, setEditingNote] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
 
   useEffect(() => {
     const id = params.id as string;
-    apiFetch<Contact>(`/contacts/${id}`).then(setContact).catch(console.error);
+    apiFetch<Contact>(`/contacts/${id}`).then((c) => {
+      setContact(c);
+      setOutcome(c.call_outcome || "");
+    }).catch(console.error);
     apiFetch<Note[]>(`/contacts/${id}/notes`).then(setNotes).catch(console.error);
     apiFetch<CallLog[]>(`/calls/contact/${id}`).then(setCalls).catch(console.error);
   }, [params.id]);
@@ -49,6 +65,74 @@ function ContactDetail() {
     } catch (err) {
       console.error("Delete failed:", err);
     }
+  };
+
+  const handleLogCall = async () => {
+    if (!contact || !outcome) return;
+    try {
+      const result = await apiFetch<CallLogResponse>("/calls/log", {
+        method: "POST",
+        body: JSON.stringify({
+          contact_id: contact.id,
+          call_method: "browser",
+          phone_number_called: contact.mobile_phone,
+          outcome,
+        }),
+      });
+      setCalls((prev) => [result.call_log, ...prev]);
+      setContact((prev) =>
+        prev ? { ...prev, call_outcome: outcome, call_occasion_count: result.occasion_count, times_called: result.times_called } : prev
+      );
+      setOutcomeSaved(true);
+      setTimeout(() => setOutcomeSaved(false), 3000);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!contact || !newNote.trim()) return;
+    try {
+      const note = await apiFetch<Note>(`/contacts/${contact.id}/notes`, {
+        method: "POST",
+        body: JSON.stringify({ content: newNote }),
+      });
+      setNotes((prev) => [note, ...prev]);
+      setNewNote("");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateNote = async (noteId: string) => {
+    try {
+      const updated = await apiFetch<Note>(`/notes/${noteId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ content: editContent }),
+      });
+      setNotes((prev) => prev.map((n) => (n.id === noteId ? updated : n)));
+      setEditingNote(null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteNote = async (noteId: string) => {
+    try {
+      await apiFetch(`/notes/${noteId}`, { method: "DELETE" });
+      setNotes((prev) => prev.filter((n) => n.id !== noteId));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const formatOutcome = (val: string | null) => {
+    const labels: Record<string, string> = {
+      didnt_pick_up: "Didn't Pick Up",
+      not_interested: "Not Interested",
+      interested: "Interested",
+    };
+    return val ? labels[val] || val : "—";
   };
 
   if (!contact) {
@@ -132,6 +216,35 @@ function ContactDetail() {
 
       <Separator className="my-6" />
 
+      <h2 className="text-lg font-semibold mb-3">Update Call Status</h2>
+      <div className="border border-border bg-card p-4">
+        <div className="flex items-center gap-3">
+          <Select value={outcome} onValueChange={(v) => { setOutcome(v); setOutcomeSaved(false); }}>
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Select outcome..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="didnt_pick_up">Didn&apos;t Pick Up</SelectItem>
+              <SelectItem value="not_interested">Not Interested</SelectItem>
+              <SelectItem value="interested">Interested</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button onClick={handleLogCall} disabled={!outcome || outcomeSaved}>
+            {outcomeSaved ? "Saved" : "Save & Log Call"}
+          </Button>
+          {outcomeSaved && (
+            <span className="flex items-center gap-1 text-sm text-green-600">
+              <CheckCircle size={14} /> Saved
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">
+          This updates the contact status and creates a call log entry.
+        </p>
+      </div>
+
+      <Separator className="my-6" />
+
       <h2 className="text-lg font-semibold mb-3">Call History</h2>
       {calls.length === 0 ? (
         <p className="text-sm text-muted-foreground">No calls recorded.</p>
@@ -142,8 +255,23 @@ function ContactDetail() {
               key={call.id}
               className="flex items-center justify-between border border-border p-3 text-sm"
             >
-              <span>{call.call_date} — {call.call_method}</span>
-              <Badge variant="outline">{call.outcome || "—"}</Badge>
+              <div className="flex items-center gap-3">
+                <span className="text-muted-foreground">{call.call_date}</span>
+                <Badge variant="secondary" className="capitalize">
+                  {call.call_method === "browser" ? "Browser Call" : "Phone Call"}
+                </Badge>
+              </div>
+              <Badge
+                variant={
+                  call.outcome === "interested"
+                    ? "default"
+                    : call.outcome === "not_interested"
+                    ? "destructive"
+                    : "outline"
+                }
+              >
+                {formatOutcome(call.outcome)}
+              </Badge>
             </div>
           ))}
         </div>
@@ -152,14 +280,62 @@ function ContactDetail() {
       <Separator className="my-6" />
 
       <h2 className="text-lg font-semibold mb-3">Notes</h2>
+      <div className="border border-border bg-card p-4 mb-4">
+        <div className="flex gap-2">
+          <Textarea
+            value={newNote}
+            onChange={(e) => setNewNote(e.target.value)}
+            placeholder="Write a note..."
+            className="min-h-[60px]"
+          />
+          <Button onClick={handleAddNote} disabled={!newNote.trim()} className="self-end">
+            <Plus size={14} />
+          </Button>
+        </div>
+      </div>
       {notes.length === 0 ? (
         <p className="text-sm text-muted-foreground">No notes yet.</p>
       ) : (
         <div className="space-y-2">
           {notes.map((note) => (
             <div key={note.id} className="border border-border p-3">
-              <p className="text-xs text-muted-foreground mb-1">{note.note_date}</p>
-              <p className="text-sm">{note.content}</p>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs text-muted-foreground">{note.note_date}</p>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => {
+                      setEditingNote(note.id);
+                      setEditContent(note.content);
+                    }}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteNote(note.id)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+              {editingNote === note.id ? (
+                <div className="flex gap-2">
+                  <Textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="min-h-[40px]"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={() => handleUpdateNote(note.id)}
+                  >
+                    Save
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm">{note.content}</p>
+              )}
             </div>
           ))}
         </div>

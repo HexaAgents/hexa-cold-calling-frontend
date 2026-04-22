@@ -45,6 +45,8 @@ import {
   CheckCircle,
   SkipForward,
   Filter,
+  History,
+  ArrowLeft,
 } from "lucide-react";
 import type { Contact, Note, CallLog, CallLogResponse } from "@/types";
 import Link from "next/link";
@@ -98,6 +100,12 @@ function CallTracker() {
   const [started, setStarted] = useState(false);
   const [loadingLocations, setLoadingLocations] = useState(true);
 
+  const [sessionHistory, setSessionHistory] = useState<Contact[]>([]);
+  const [viewingHistoryContact, setViewingHistoryContact] = useState<Contact | null>(null);
+
+  const displayContact = viewingHistoryContact ?? contact;
+  const isViewingHistory = viewingHistoryContact !== null;
+
   useEffect(() => {
     apiFetch<LocationOptions>("/contacts/locations")
       .then(setLocations)
@@ -115,12 +123,19 @@ function CallTracker() {
   }, [filterCities, filterStates, filterCountries]);
 
   const claimNext = useCallback(async () => {
+    setViewingHistoryContact(null);
     setLoading(true);
     setOutcome("");
     setOutcomeSaved(false);
     setOutcomeRequired(false);
     setCalls([]);
     setNotes([]);
+    if (contact) {
+      setSessionHistory((prev) => {
+        if (prev.some((c) => c.id === contact.id)) return prev;
+        return [...prev, contact];
+      });
+    }
     try {
       const next = await apiFetch<Contact | null>(`/calls/next${buildFilterQuery()}`, { method: "POST" });
       if (next && next.id) {
@@ -137,7 +152,7 @@ function CallTracker() {
     } finally {
       setLoading(false);
     }
-  }, [buildFilterQuery]);
+  }, [buildFilterQuery, contact]);
 
   const handleStartCalling = async () => {
     setStarted(true);
@@ -160,6 +175,38 @@ function CallTracker() {
     fetchContactData();
   }, [fetchContactData]);
 
+  const viewHistoryContact = async (historyContact: Contact) => {
+    setOutcomeDialogOpen(false);
+    setViewingHistoryContact(historyContact);
+    setOutcome(historyContact.call_outcome || "");
+    setOutcomeSaved(false);
+    setOutcomeRequired(false);
+    setNewNote("");
+    setEditingNote(null);
+    const [n, c] = await Promise.all([
+      apiFetch<Note[]>(`/contacts/${historyContact.id}/notes`).catch(() => []),
+      apiFetch<CallLog[]>(`/calls/contact/${historyContact.id}`).catch(() => []),
+    ]);
+    setNotes(n);
+    setCalls(c);
+  };
+
+  const returnToCurrentContact = async () => {
+    setViewingHistoryContact(null);
+    setNewNote("");
+    setEditingNote(null);
+    if (!contact) return;
+    setOutcome(contact.call_outcome || "");
+    setOutcomeSaved(false);
+    setOutcomeRequired(false);
+    const [n, c] = await Promise.all([
+      apiFetch<Note[]>(`/contacts/${contact.id}/notes`).catch(() => []),
+      apiFetch<CallLog[]>(`/calls/contact/${contact.id}`).catch(() => []),
+    ]);
+    setNotes(n);
+    setCalls(c);
+  };
+
   const initTwilioDevice = async (): Promise<Device> => {
     if (twilioDevice) return twilioDevice;
     const { token } = await apiFetch<{ token: string }>("/calls/token", { method: "POST" });
@@ -170,7 +217,7 @@ function CallTracker() {
   };
 
   const handleCall = async (phone: string, method: "browser" | "bridge") => {
-    if (!contact) return;
+    if (!contact || isViewingHistory) return;
     setOutcomeRequired(true);
 
     if (method === "browser") {
@@ -215,14 +262,14 @@ function CallTracker() {
   };
 
   const handleLogCall = async () => {
-    if (!contact || !outcome) return;
+    if (!displayContact || !outcome) return;
     try {
       const result = await apiFetch<CallLogResponse>("/calls/log", {
         method: "POST",
         body: JSON.stringify({
-          contact_id: contact.id,
+          contact_id: displayContact.id,
           call_method: "browser",
-          phone_number_called: contact.mobile_phone,
+          phone_number_called: displayContact.mobile_phone,
           outcome,
         }),
       });
@@ -232,9 +279,22 @@ function CallTracker() {
       setOutcomeSaved(true);
       setTimeout(() => setOutcomeSaved(false), 3000);
 
-      setContact((prev) =>
-        prev ? { ...prev, call_outcome: outcome, call_occasion_count: result.occasion_count, times_called: result.times_called } : prev
-      );
+      if (isViewingHistory) {
+        setViewingHistoryContact((prev) =>
+          prev ? { ...prev, call_outcome: outcome, call_occasion_count: result.occasion_count, times_called: result.times_called } : prev
+        );
+        setSessionHistory((prev) =>
+          prev.map((c) =>
+            c.id === displayContact.id
+              ? { ...c, call_outcome: outcome, call_occasion_count: result.occasion_count, times_called: result.times_called }
+              : c
+          )
+        );
+      } else {
+        setContact((prev) =>
+          prev ? { ...prev, call_outcome: outcome, call_occasion_count: result.occasion_count, times_called: result.times_called } : prev
+        );
+      }
 
       if (result.sms_prompt_needed) {
         setSmsDialogOpen(true);
@@ -263,14 +323,16 @@ function CallTracker() {
     await claimNext();
   };
 
-  const hasLoggedThisCall = outcomeSaved || (!outcomeRequired && calls.length > 0 && outcome !== "");
+  const hasLoggedThisCall = isViewingHistory
+    ? outcomeSaved
+    : outcomeSaved || (!outcomeRequired && calls.length > 0 && outcome !== "");
 
   const handleSendSms = async () => {
-    if (!contact) return;
+    if (!displayContact) return;
     try {
       await apiFetch("/sms/send", {
         method: "POST",
-        body: JSON.stringify({ contact_id: contact.id }),
+        body: JSON.stringify({ contact_id: displayContact.id }),
       });
       setSmsDialogOpen(false);
     } catch (err) {
@@ -279,12 +341,12 @@ function CallTracker() {
   };
 
   const handleScheduleSms = async () => {
-    if (!contact || !scheduledDate) return;
+    if (!displayContact || !scheduledDate) return;
     try {
       await apiFetch("/sms/schedule", {
         method: "POST",
         body: JSON.stringify({
-          contact_id: contact.id,
+          contact_id: displayContact.id,
           scheduled_at: new Date(scheduledDate).toISOString(),
         }),
       });
@@ -296,9 +358,9 @@ function CallTracker() {
   };
 
   const handleAddNote = async () => {
-    if (!contact || !newNote.trim()) return;
+    if (!displayContact || !newNote.trim()) return;
     try {
-      const note = await apiFetch<Note>(`/contacts/${contact.id}/notes`, {
+      const note = await apiFetch<Note>(`/contacts/${displayContact.id}/notes`, {
         method: "POST",
         body: JSON.stringify({ content: newNote }),
       });
@@ -411,7 +473,7 @@ function CallTracker() {
     return <div className="p-6 text-muted-foreground">Loading next contact...</div>;
   }
 
-  if (queueEmpty || !contact) {
+  if ((queueEmpty || !contact) && !isViewingHistory) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <p className="text-muted-foreground">No more contacts to call right now.</p>
@@ -429,14 +491,40 @@ function CallTracker() {
             </Button>
           </Link>
         </div>
+        {sessionHistory.length > 0 && (
+          <div className="mt-2 border border-border bg-card p-4 w-full max-w-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <History size={14} className="text-muted-foreground" />
+              <span className="text-xs font-medium text-muted-foreground">Previous Contacts</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {sessionHistory.map((h) => (
+                <button
+                  key={h.id}
+                  onClick={() => viewHistoryContact(h)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs border border-border rounded-md hover:bg-muted transition-colors"
+                >
+                  <span>{h.first_name} {h.last_name}</span>
+                  {h.call_outcome && (
+                    <Badge variant="outline" className="text-[10px] px-1 py-0">
+                      {formatOutcome(h.call_outcome)}
+                    </Badge>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
+  if (!displayContact) return null;
+
   const phones: [string, string | null][] = [
-    ["Mobile", contact.mobile_phone ?? null],
-    ["Work", contact.work_direct_phone ?? null],
-    ["Corporate", contact.corporate_phone ?? null],
+    ["Mobile", displayContact.mobile_phone ?? null],
+    ["Work", displayContact.work_direct_phone ?? null],
+    ["Corporate", displayContact.corporate_phone ?? null],
   ];
 
   return (
@@ -452,50 +540,97 @@ function CallTracker() {
         </div>
       )}
 
+      {/* Session History */}
+      {sessionHistory.length > 0 && (
+        <div className="mb-4 border border-border bg-card p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <History size={14} className="text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground">Previous Contacts</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {sessionHistory.map((h) => (
+              <button
+                key={h.id}
+                onClick={() => viewHistoryContact(h)}
+                disabled={!!activeCall}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs border rounded-md transition-colors ${
+                  viewingHistoryContact?.id === h.id
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border hover:bg-muted"
+                } ${activeCall ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                <span>{h.first_name} {h.last_name}</span>
+                {h.call_outcome && (
+                  <Badge variant="outline" className="text-[10px] px-1 py-0">
+                    {formatOutcome(h.call_outcome)}
+                  </Badge>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Viewing history banner */}
+      {isViewingHistory && (
+        <div className="mb-4 flex items-center justify-between border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-3">
+          <div className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+            <History size={14} />
+            <span>Viewing previous contact — calling is disabled</span>
+          </div>
+          <Button size="sm" variant="outline" onClick={returnToCurrentContact}>
+            <ArrowLeft size={14} className="mr-1" />
+            {contact ? "Return to current contact" : "Back to queue"}
+          </Button>
+        </div>
+      )}
+
       {/* Navigation */}
-      <div className="flex items-center justify-between mb-6">
-        <Button variant="ghost" size="sm" onClick={handleSkip}>
-          <SkipForward size={14} className="mr-1" /> Skip
-        </Button>
-        <span className="text-sm text-muted-foreground">
-          Assigned to you
-        </span>
-        <Button variant="outline" size="sm" onClick={handleNext}>
-          Next <ChevronRight size={14} className="ml-1" />
-        </Button>
-      </div>
+      {!isViewingHistory && (
+        <div className="flex items-center justify-between mb-6">
+          <Button variant="ghost" size="sm" onClick={handleSkip}>
+            <SkipForward size={14} className="mr-1" /> Skip
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Assigned to you
+          </span>
+          <Button variant="outline" size="sm" onClick={handleNext}>
+            Next <ChevronRight size={14} className="ml-1" />
+          </Button>
+        </div>
+      )}
 
       <div className="space-y-6">
         {/* Contact Card */}
         <div className="border border-border bg-card p-6">
-          {contact.times_called > 0 && (
+          {displayContact.times_called > 0 && (
             <div className="flex items-center gap-2 mb-3">
               <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700">
                 Callback
               </Badge>
               <span className="text-xs text-muted-foreground">
-                Called {contact.times_called} time{contact.times_called !== 1 ? "s" : ""} previously
+                Called {displayContact.times_called} time{displayContact.times_called !== 1 ? "s" : ""} previously
               </span>
             </div>
           )}
           <div className="flex items-start justify-between">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">
-                {contact.first_name} {contact.last_name}
+                {displayContact.first_name} {displayContact.last_name}
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
-                {contact.title} at {contact.company_name}
+                {displayContact.title} at {displayContact.company_name}
               </p>
-              {contact.company_description && (
+              {displayContact.company_description && (
                 <p className="mt-2 text-sm text-muted-foreground/80 leading-relaxed border-l-2 border-primary/30 pl-3">
-                  {contact.company_description}
+                  {displayContact.company_description}
                 </p>
               )}
             </div>
             <div className="text-right">
-              <p className="text-3xl font-mono font-bold">{contact.score ?? "—"}</p>
+              <p className="text-3xl font-mono font-bold">{displayContact.score ?? "—"}</p>
               <Badge variant="outline" className="mt-1">
-                {contact.company_type || "unscored"}
+                {displayContact.company_type || "unscored"}
               </Badge>
             </div>
           </div>
@@ -503,43 +638,43 @@ function CallTracker() {
           <Separator className="my-4" />
 
           <div className="grid grid-cols-3 gap-4 text-sm">
-            {contact.employees && (
+            {displayContact.employees && (
               <div>
                 <p className="text-xs text-muted-foreground">Employees</p>
-                <p>{contact.employees}</p>
+                <p>{displayContact.employees}</p>
               </div>
             )}
-            {(contact.city || contact.state || contact.country) && (
+            {(displayContact.city || displayContact.state || displayContact.country) && (
               <div>
                 <p className="text-xs text-muted-foreground">Location</p>
-                <p>{[contact.city, contact.state, contact.country].filter(Boolean).join(", ")}</p>
+                <p>{[displayContact.city, displayContact.state, displayContact.country].filter(Boolean).join(", ")}</p>
               </div>
             )}
-            {contact.email && (
+            {displayContact.email && (
               <div>
                 <p className="text-xs text-muted-foreground">Email</p>
-                <p>{contact.email}</p>
+                <p>{displayContact.email}</p>
               </div>
             )}
-            {contact.website && (
+            {displayContact.website && (
               <div>
                 <p className="text-xs text-muted-foreground">Website</p>
                 <a
-                  href={contact.website}
+                  href={displayContact.website}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline flex items-center gap-1"
                 >
-                  {contact.website.replace(/^https?:\/\/(www\.)?/, "").slice(0, 30)}
+                  {displayContact.website.replace(/^https?:\/\/(www\.)?/, "").slice(0, 30)}
                   <ExternalLink size={10} />
                 </a>
               </div>
             )}
-            {contact.person_linkedin_url && (
+            {displayContact.person_linkedin_url && (
               <div>
                 <p className="text-xs text-muted-foreground">LinkedIn</p>
                 <a
-                  href={contact.person_linkedin_url}
+                  href={displayContact.person_linkedin_url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-primary hover:underline flex items-center gap-1"
@@ -550,7 +685,7 @@ function CallTracker() {
             )}
             <div>
               <p className="text-xs text-muted-foreground">Times called</p>
-              <p>{contact.times_called ?? 0}</p>
+              <p>{displayContact.times_called ?? 0}</p>
             </div>
           </div>
         </div>
@@ -571,6 +706,7 @@ function CallTracker() {
                       size="sm"
                       variant="outline"
                       onClick={() => handleCall(phone, "browser")}
+                      disabled={isViewingHistory}
                     >
                       <PhoneCall size={12} className="mr-1" /> Browser
                     </Button>
@@ -578,6 +714,7 @@ function CallTracker() {
                       size="sm"
                       variant="outline"
                       onClick={() => handleCall(phone, "bridge")}
+                      disabled={isViewingHistory}
                     >
                       <Phone size={12} className="mr-1" /> Phone
                     </Button>
@@ -587,7 +724,7 @@ function CallTracker() {
             )}
             {phones.every(([, p]) => !p) && (
               <p className="text-sm text-muted-foreground">
-                {contact.enrichment_status === "pending_enrichment" || contact.enrichment_status === "enriching"
+                {displayContact.enrichment_status === "pending_enrichment" || displayContact.enrichment_status === "enriching"
                   ? "Phone numbers pending enrichment via Apollo..."
                   : "No phone numbers available."}
               </p>
@@ -727,10 +864,10 @@ function CallTracker() {
       <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Send SMS to {contact?.first_name}?</DialogTitle>
+            <DialogTitle>Send SMS to {displayContact?.first_name}?</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            This contact has been called {contact?.times_called ?? 0} times.
+            This contact has been called {displayContact?.times_called ?? 0} times.
             Would you like to send a text message?
           </p>
           <div className="space-y-3 mt-2">
