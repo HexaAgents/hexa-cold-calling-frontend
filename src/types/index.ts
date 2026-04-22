@@ -18,6 +18,7 @@ export interface Contact {
   company_type: string | null;
   rationale: string | null;
   rejection_reason: string | null;
+  company_description: string | null;
   exa_scrape_success: boolean;
   scoring_failed: boolean;
   call_occasion_count: number;
@@ -27,6 +28,7 @@ export interface Contact {
   sms_sent: boolean;
   sms_sent_after_calls: number | null;
   sms_scheduled_at: string | null;
+  enrichment_status: string | null;
   created_at: string | null;
 }
 
@@ -88,4 +90,19 @@ export interface User {
   id: string;
   email: string;
   full_name: string;
+}
+
+export interface ProductivityUser {
+  id: string;
+  first_name: string;
+}
+
+export interface ProductivityRow {
+  date: string;
+  counts: Record<string, number>;
+}
+
+export interface ProductivityResponse {
+  users: ProductivityUser[];
+  rows: ProductivityRow[];
 }

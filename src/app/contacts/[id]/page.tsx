@@ -93,6 +93,13 @@ function ContactDetail() {
         {contact.title} at {contact.company_name}
       </p>
 
+      {contact.company_description && (
+        <div className="mt-4 border border-border bg-muted/40 p-4">
+          <p className="text-xs font-medium text-muted-foreground mb-1">About {contact.company_name}</p>
+          <p className="text-sm leading-relaxed">{contact.company_description}</p>
+        </div>
+      )}
+
       <Separator className="my-6" />
 
       <div className="grid grid-cols-2 gap-x-8 gap-y-3">

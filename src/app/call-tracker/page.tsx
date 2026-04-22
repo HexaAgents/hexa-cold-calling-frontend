@@ -349,6 +349,11 @@ function CallTracker() {
                 <p className="text-sm text-muted-foreground mt-1">
                   {contact.title} at {contact.company_name}
                 </p>
+                {contact.company_description && (
+                  <p className="mt-2 text-sm text-muted-foreground/80 leading-relaxed border-l-2 border-primary/30 pl-3">
+                    {contact.company_description}
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <p className="text-3xl font-mono font-bold">{contact.score ?? "—"}</p>
@@ -444,7 +449,11 @@ function CallTracker() {
                 ) : null
               )}
               {phones.every(([, p]) => !p) && (
-                <p className="text-sm text-muted-foreground">No phone numbers available.</p>
+                <p className="text-sm text-muted-foreground">
+                  {contact?.enrichment_status === "pending_enrichment" || contact?.enrichment_status === "enriching"
+                    ? "Phone numbers pending enrichment via Apollo..."
+                    : "No phone numbers available."}
+                </p>
               )}
             </div>
             {(callStatus || activeCall) && (

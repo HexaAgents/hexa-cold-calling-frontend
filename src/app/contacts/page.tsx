@@ -60,6 +60,8 @@ function ContactsContent() {
   const [sortOrder, setSortOrder] = useState("asc");
   const [outcomeFilter, setOutcomeFilter] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [enrichmentCounts, setEnrichmentCounts] = useState<Record<string, number>>({});
+  const [enriching, setEnriching] = useState(false);
 
   const fetchContacts = useCallback(async () => {
     setLoading(true);
@@ -84,9 +86,41 @@ function ContactsContent() {
     }
   }, [sortBy, sortOrder, outcomeFilter, page]);
 
+  const fetchEnrichmentStatus = useCallback(async () => {
+    try {
+      const data = await apiFetch<Record<string, number>>("/apollo/enrich/status");
+      setEnrichmentCounts(data);
+    } catch {
+      // Apollo enrichment not configured
+    }
+  }, []);
+
   useEffect(() => {
     fetchContacts();
-  }, [fetchContacts]);
+    fetchEnrichmentStatus();
+  }, [fetchContacts, fetchEnrichmentStatus]);
+
+  const handleEnrichAll = async () => {
+    setEnriching(true);
+    try {
+      await apiFetch("/apollo/enrich", {
+        method: "POST",
+        body: JSON.stringify({ enrich_all: true }),
+      });
+      const poll = setInterval(async () => {
+        const data = await apiFetch<Record<string, number>>("/apollo/enrich/status");
+        setEnrichmentCounts(data);
+        if ((data.pending_enrichment || 0) === 0 && (data.enriching || 0) === 0) {
+          clearInterval(poll);
+          setEnriching(false);
+          fetchContacts();
+        }
+      }, 5000);
+    } catch (err) {
+      console.error("Enrichment failed:", err);
+      setEnriching(false);
+    }
+  };
 
   const toggleSort = (column: string) => {
     if (sortBy === column) {
@@ -135,6 +169,22 @@ function ContactsContent() {
           </SelectContent>
         </Select>
       </div>
+
+      {(enrichmentCounts.pending_enrichment ?? 0) > 0 && (
+        <div className="mb-4 flex items-center justify-between border border-border bg-muted/40 p-4">
+          <p className="text-sm">
+            {enrichmentCounts.pending_enrichment} contacts need phone numbers.
+            {enrichmentCounts.enriching ? ` ${enrichmentCounts.enriching} enriching...` : ""}
+          </p>
+          <Button
+            size="sm"
+            onClick={handleEnrichAll}
+            disabled={enriching}
+          >
+            {enriching ? "Enriching..." : "Enrich via Apollo"}
+          </Button>
+        </div>
+      )}
 
       <div className="border border-border bg-card">
         <Table>

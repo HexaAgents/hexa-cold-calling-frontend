@@ -8,6 +8,7 @@ import {
   Upload,
   Settings,
   LogOut,
+  BarChart3,
 } from "lucide-react";
 import HexaLogo from "@/components/layout/hexa-logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -17,6 +18,7 @@ import type { User } from "@/types";
 const navItems = [
   { name: "Contacts", icon: Users, href: "/contacts" },
   { name: "Call Tracker", icon: PhoneCall, href: "/call-tracker" },
+  { name: "Productivity", icon: BarChart3, href: "/productivity" },
   { name: "Import", icon: Upload, href: "/import" },
   { name: "Settings", icon: Settings, href: "/settings" },
 ];
