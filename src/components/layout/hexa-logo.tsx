@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 interface HexaLogoProps {
@@ -15,17 +16,13 @@ export default function HexaLogo({
 }: HexaLogoProps) {
   return (
     <div className="flex items-center gap-2">
-      <div
-        className="flex items-center justify-center rounded-lg bg-primary overflow-hidden"
-        style={{ width: size, height: size }}
-      >
-        <span
-          className="font-bold text-primary-foreground"
-          style={{ fontSize: size * 0.4 }}
-        >
-          H
-        </span>
-      </div>
+      <Image
+        src="/hexa-logo.png"
+        alt="Hexa"
+        width={size}
+        height={size}
+        className="rounded-lg"
+      />
       {showText && (
         <span className={cn("font-semibold tracking-tight", textClassName)}>
           Hexa

@@ -21,6 +21,10 @@ const playfairDisplay = Playfair_Display({
 export const metadata: Metadata = {
   title: "Hexa Cold Calling",
   description: "Lead scoring and cold calling platform",
+  icons: {
+    icon: "/hexa-logo.png",
+    apple: "/hexa-logo.png",
+  },
 };
 
 export default function RootLayout({
