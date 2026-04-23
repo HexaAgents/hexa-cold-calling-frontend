@@ -303,8 +303,8 @@ function CallTracker() {
   const badNumberPhoneType: string | null = (() => {
     if (lastDialedPhone) return lastDialedPhone.type;
     if (!displayContact) return null;
-    const available: [string, string][] = (
-      [["mobile_phone", displayContact.mobile_phone], ["work_direct_phone", displayContact.work_direct_phone], ["corporate_phone", displayContact.corporate_phone]] as const
+    const available = (
+      [["mobile_phone", displayContact.mobile_phone], ["work_direct_phone", displayContact.work_direct_phone], ["corporate_phone", displayContact.corporate_phone]] as [string, string | null][]
     ).filter((entry): entry is [string, string] => !!entry[1]);
     if (available.length === 1) return available[0][0];
     return null;
