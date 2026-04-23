@@ -5,8 +5,22 @@ import AuthGuard from "@/components/layout/auth-guard";
 import AppSidebar from "@/components/layout/app-sidebar";
 import { apiUpload, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Upload, FileText, AlertCircle } from "lucide-react";
+import { Upload, FileText, AlertCircle, CreditCard, RefreshCw, CheckCircle2 } from "lucide-react";
 import type { ImportBatch } from "@/types";
+
+type EnrichmentHealth = {
+  counts_by_status: {
+    pending_enrichment: number;
+    enriching: number;
+    enriched: number;
+    enrichment_failed: number;
+    enrichment_no_phone: number;
+  };
+  out_of_credits_count: number;
+  exhausted_retries_count: number;
+  stale_enriching_count: number;
+  out_of_credits: boolean;
+};
 
 export default function ImportPage() {
   return (
@@ -103,6 +117,8 @@ function ImportContent() {
       <p className="text-sm text-muted-foreground mb-6">
         Upload an Apollo CSV export to score and import contacts.
       </p>
+
+      <EnrichmentHealthBanner />
 
       <div
         onDragOver={(e) => {
@@ -201,6 +217,120 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
           <span>{batch.enrichment_error} — contacts saved as pending. Add credits and re-import to retry.</span>
         </div>
       )}
+    </div>
+  );
+}
+
+function EnrichmentHealthBanner() {
+  const [health, setHealth] = useState<EnrichmentHealth | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [justRetried, setJustRetried] = useState(false);
+
+  const fetchHealth = useCallback(async () => {
+    try {
+      const data = await apiFetch<EnrichmentHealth>("/apollo/enrich/status");
+      setHealth(data);
+    } catch (err) {
+      console.error("Failed to fetch enrichment health", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHealth();
+    const interval = setInterval(fetchHealth, 15000);
+    return () => clearInterval(interval);
+  }, [fetchHealth]);
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    try {
+      await apiFetch("/apollo/enrich/retry-stale", { method: "POST" });
+      setJustRetried(true);
+      setTimeout(() => setJustRetried(false), 5000);
+      setTimeout(fetchHealth, 3000);
+    } catch (err) {
+      console.error("Retry failed", err);
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  if (!health) return null;
+
+  const { counts_by_status, out_of_credits_count, stale_enriching_count, exhausted_retries_count, out_of_credits } = health;
+  const pending = counts_by_status.pending_enrichment;
+  const enriching = counts_by_status.enriching;
+  const failed = counts_by_status.enrichment_failed;
+  const noPhone = counts_by_status.enrichment_no_phone;
+  const hasAnyIssue = failed > 0 || stale_enriching_count > 0 || out_of_credits || pending > 0;
+
+  if (!hasAnyIssue) {
+    return (
+      <div className="mb-6 border border-border bg-card p-3 text-xs text-muted-foreground flex items-center gap-2">
+        <CheckCircle2 size={14} className="text-emerald-500" />
+        Apollo enrichment is up to date. {counts_by_status.enriched} contacts enriched
+        {noPhone > 0 ? `, ${noPhone} with no mobile on file` : ""}.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-6 border border-border bg-card p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-2 flex-1">
+          {out_of_credits ? (
+            <CreditCard size={16} className="text-amber-500 mt-0.5 shrink-0" />
+          ) : (
+            <AlertCircle size={16} className="text-amber-500 mt-0.5 shrink-0" />
+          )}
+          <div className="space-y-1 text-sm">
+            <p className="font-medium">
+              {out_of_credits
+                ? `Apollo is out of phone credits — ${out_of_credits_count} contacts waiting.`
+                : "Enrichment has contacts that need attention."}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {out_of_credits
+                ? "Top up Apollo credits, then click Retry to flush the queue."
+                : "Auto-retry runs every 10 min. Click Retry to flush now."}
+            </p>
+            <ul className="text-xs text-muted-foreground space-y-0.5 mt-2">
+              {pending > 0 && <li>{pending} pending enrichment</li>}
+              {enriching > 0 && (
+                <li>
+                  {enriching} currently enriching
+                  {stale_enriching_count > 0 && ` (${stale_enriching_count} stuck, will be auto-retried)`}
+                </li>
+              )}
+              {failed > 0 && (
+                <li>
+                  {failed} failed
+                  {exhausted_retries_count > 0 && ` (${exhausted_retries_count} exhausted auto-retries — need manual retry)`}
+                </li>
+              )}
+              {noPhone > 0 && <li>{noPhone} enriched but no mobile on file</li>}
+            </ul>
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRetry}
+          disabled={retrying}
+          className="shrink-0"
+        >
+          {justRetried ? (
+            <>
+              <CheckCircle2 size={14} className="mr-1" /> Queued
+            </>
+          ) : (
+            <>
+              <RefreshCw size={14} className={`mr-1 ${retrying ? "animate-spin" : ""}`} />
+              {retrying ? "Retrying..." : "Retry"}
+            </>
+          )}
+        </Button>
+      </div>
     </div>
   );
 }
