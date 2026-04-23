@@ -131,6 +131,7 @@ function ContactDetail() {
       didnt_pick_up: "Didn't Pick Up",
       not_interested: "Not Interested",
       interested: "Interested",
+      bad_number: "Bad Number",
     };
     return val ? labels[val] || val : "—";
   };
@@ -227,6 +228,7 @@ function ContactDetail() {
               <SelectItem value="didnt_pick_up">Didn&apos;t Pick Up</SelectItem>
               <SelectItem value="not_interested">Not Interested</SelectItem>
               <SelectItem value="interested">Interested</SelectItem>
+              <SelectItem value="bad_number">Bad Number</SelectItem>
             </SelectContent>
           </Select>
           <Button onClick={handleLogCall} disabled={!outcome || outcomeSaved}>
@@ -265,7 +267,7 @@ function ContactDetail() {
                 variant={
                   call.outcome === "interested"
                     ? "default"
-                    : call.outcome === "not_interested"
+                    : call.outcome === "not_interested" || call.outcome === "bad_number"
                     ? "destructive"
                     : "outline"
                 }

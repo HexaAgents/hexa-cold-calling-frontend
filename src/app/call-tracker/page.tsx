@@ -9,13 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -29,6 +22,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -47,6 +50,11 @@ import {
   ArrowLeft,
   Copy,
   Check,
+  AlertTriangle,
+  PhoneMissed,
+  ThumbsDown,
+  ThumbsUp,
+  PhoneOff,
 } from "lucide-react";
 import type { Contact, Note, CallLog, CallLogResponse } from "@/types";
 import Link from "next/link";
@@ -105,6 +113,8 @@ function CallTracker() {
   const [outcomeDialogOpen, setOutcomeDialogOpen] = useState(false);
   const [queueEmpty, setQueueEmpty] = useState(false);
   const [copiedPhone, setCopiedPhone] = useState<string | null>(null);
+  const [badNumberDialogOpen, setBadNumberDialogOpen] = useState(false);
+  const [lastDialedPhone, setLastDialedPhone] = useState<{ number: string; type: string } | null>(null);
 
   const [locations, setLocations] = useState<LocationOptions>({ cities: [], states: [], countries: [] });
   const [loadingLocations, setLoadingLocations] = useState(true);
@@ -141,6 +151,7 @@ function CallTracker() {
     setOutcomeRequired(false);
     setCalls([]);
     setNotes([]);
+    setLastDialedPhone(null);
     if (contact) {
       setSessionHistory((prev) => {
         if (prev.some((c) => c.id === contact.id)) return prev;
@@ -233,9 +244,10 @@ function CallTracker() {
     return device;
   };
 
-  const handleCall = async (phone: string, method: "browser" | "bridge") => {
+  const handleCall = async (phone: string, method: "browser" | "bridge", phoneType?: string) => {
     if (!contact || isViewingHistory) return;
     setOutcomeRequired(true);
+    if (phoneType) setLastDialedPhone({ number: phone, type: phoneType });
 
     if (method === "browser") {
       try {
@@ -288,7 +300,28 @@ function CallTracker() {
     }
   };
 
+  const badNumberPhoneType: string | null = (() => {
+    if (lastDialedPhone) return lastDialedPhone.type;
+    if (!displayContact) return null;
+    const available: [string, string][] = (
+      [["mobile_phone", displayContact.mobile_phone], ["work_direct_phone", displayContact.work_direct_phone], ["corporate_phone", displayContact.corporate_phone]] as const
+    ).filter((entry): entry is [string, string] => !!entry[1]);
+    if (available.length === 1) return available[0][0];
+    return null;
+  })();
+
   const handleLogCall = async () => {
+    if (!displayContact || !outcome) return;
+
+    if (outcome === "bad_number") {
+      setBadNumberDialogOpen(true);
+      return;
+    }
+
+    await saveOutcome();
+  };
+
+  const saveOutcome = async () => {
     if (!displayContact || !outcome) return;
     try {
       const result = await apiFetch<CallLogResponse>("/calls/log", {
@@ -296,7 +329,7 @@ function CallTracker() {
         body: JSON.stringify({
           contact_id: displayContact.id,
           call_method: "browser",
-          phone_number_called: displayContact.mobile_phone,
+          phone_number_called: lastDialedPhone?.number ?? displayContact.mobile_phone,
           outcome,
         }),
       });
@@ -323,6 +356,22 @@ function CallTracker() {
       if (result.sms_prompt_needed) {
         setSmsDialogOpen(true);
       }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleBadNumberConfirm = async () => {
+    if (!displayContact || !badNumberPhoneType) return;
+    try {
+      await apiFetch(`/contacts/${displayContact.id}/phone-number`, {
+        method: "DELETE",
+        body: JSON.stringify({ phone_type: badNumberPhoneType }),
+      });
+      await saveOutcome();
+      setBadNumberDialogOpen(false);
+      setLastDialedPhone(null);
+      await claimNext();
     } catch (err) {
       console.error(err);
     }
@@ -411,6 +460,7 @@ function CallTracker() {
       didnt_pick_up: "Didn't Pick Up",
       not_interested: "Not Interested",
       interested: "Interested",
+      bad_number: "Bad Number",
     };
     return val ? labels[val] || val : "—";
   };
@@ -531,27 +581,65 @@ function CallTracker() {
 
   if (!displayContact) return null;
 
-  const phones: [string, string | null][] = [
-    ["Mobile", displayContact.mobile_phone ?? null],
-    ["Work", displayContact.work_direct_phone ?? null],
-    ["Corporate", displayContact.corporate_phone ?? null],
+  const phones: [string, string | null, string][] = [
+    ["Mobile", displayContact.mobile_phone ?? null, "mobile_phone"],
+    ["Work", displayContact.work_direct_phone ?? null, "work_direct_phone"],
+    ["Corporate", displayContact.corporate_phone ?? null, "corporate_phone"],
   ];
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
       {/* Active filters indicator */}
-      {(filterCities.length > 0 || filterStates.length > 0 || filterCountries.length > 0 || filterBusinessHours) && (
-        <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground flex-wrap">
-          <Filter size={12} />
-          {[...filterCountries, ...filterStates, ...filterCities].map((v) => (
-            <Badge key={v} variant="secondary" className="text-xs">{v}</Badge>
-          ))}
-          {filterBusinessHours && (
-            <Badge variant="secondary" className="text-xs gap-1">
-              <Clock size={10} /> Business hours
+      <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground flex-wrap">
+        <button onClick={() => setStarted(false)} className="flex items-center gap-1 text-primary hover:underline">
+          <Filter size={12} /> Filters
+        </button>
+        {(filterCities.length > 0 || filterStates.length > 0 || filterCountries.length > 0 || filterBusinessHours) && (
+          <>
+            <span>·</span>
+            {[...filterCountries, ...filterStates, ...filterCities].map((v) => (
+              <Badge key={v} variant="secondary" className="text-xs">{v}</Badge>
+            ))}
+            {filterBusinessHours && (
+              <Badge variant="secondary" className="text-xs gap-1">
+                <Clock size={10} /> Business hours
+              </Badge>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Session history tags */}
+      {(sessionHistory.length > 0 || contact) && (
+        <div className="flex items-center gap-1.5 mb-3 overflow-x-auto flex-nowrap pb-1">
+          {sessionHistory.map((c, i) => {
+            const idxForThis = sessionHistory.length - 1 - i;
+            const isActive = historyIndex === idxForThis;
+            return (
+              <Badge
+                key={c.id}
+                variant={isActive ? "default" : "secondary"}
+                className={`shrink-0 text-xs cursor-pointer transition-colors ${
+                  !isActive ? "hover:bg-muted-foreground/20" : ""
+                }`}
+                onClick={() => setHistoryIndex(idxForThis)}
+              >
+                {c.first_name} {c.last_name?.[0] ? `${c.last_name[0]}.` : ""}
+              </Badge>
+            );
+          })}
+          {contact && (
+            <Badge
+              variant={historyIndex === null ? "default" : "secondary"}
+              className={`shrink-0 text-xs cursor-pointer transition-colors ${
+                historyIndex !== null ? "hover:bg-muted-foreground/20" : ""
+              }`}
+              onClick={() => setHistoryIndex(null)}
+            >
+              {contact.first_name} {contact.last_name?.[0] ? `${contact.last_name[0]}.` : ""}
+              {historyIndex === null && " ●"}
             </Badge>
           )}
-          <button onClick={() => setStarted(false)} className="text-primary hover:underline ml-1">Change</button>
         </div>
       )}
 
@@ -679,22 +767,31 @@ function CallTracker() {
         <div className="border border-border bg-card p-6">
           <h2 className="text-sm font-semibold mb-3">Phone Numbers</h2>
           <div className="space-y-2">
-            {phones.map(([label, phone]) =>
-              phone ? (
+            {phones.map(([label, phone, phoneType]) => {
+              if (!phone) return null;
+              const extMatch = phone.match(/^(.+?)(?:ext|x)(\d+)$/i);
+              const baseNumber = extMatch ? extMatch[1] : phone;
+              const ext = extMatch ? extMatch[2] : null;
+              return (
                 <div key={label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                   <div>
                     <p className="text-xs text-muted-foreground">{label}</p>
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-mono">{phone}</p>
+                      <p className="text-sm font-mono">{baseNumber}</p>
+                      {ext && (
+                        <span className="text-xs font-semibold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          EXT {ext}
+                        </span>
+                      )}
                       <Button
                         size="icon"
                         variant="ghost"
                         className="h-6 w-6"
-                        onClick={() => handleCopyPhone(phone)}
+                        onClick={() => handleCopyPhone(baseNumber)}
                         aria-label={`Copy ${label} phone number`}
-                        title={copiedPhone === phone ? "Copied!" : "Copy phone number"}
+                        title={copiedPhone === baseNumber ? "Copied!" : "Copy phone number"}
                       >
-                        {copiedPhone === phone ? (
+                        {copiedPhone === baseNumber ? (
                           <Check size={12} className="text-green-600" />
                         ) : (
                           <Copy size={12} />
@@ -706,7 +803,7 @@ function CallTracker() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleCall(phone, "browser")}
+                      onClick={() => handleCall(phone, "browser", phoneType)}
                       disabled={isViewingHistory}
                     >
                       <PhoneCall size={12} className="mr-1" /> Browser
@@ -714,15 +811,15 @@ function CallTracker() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleCall(phone, "bridge")}
+                      onClick={() => handleCall(phone, "bridge", phoneType)}
                       disabled={isViewingHistory}
                     >
                       <Phone size={12} className="mr-1" /> Phone
                     </Button>
                   </div>
                 </div>
-              ) : null
-            )}
+              );
+            })}
             {phones.every(([, p]) => !p) && (
               <p className="text-sm text-muted-foreground">
                 {displayContact.enrichment_status === "pending_enrichment" || displayContact.enrichment_status === "enriching"
@@ -746,25 +843,53 @@ function CallTracker() {
         {/* Call Outcome */}
         <div className="border border-border bg-card p-6">
           <h2 className="text-sm font-semibold mb-3">Call Outcome</h2>
-          <div className="flex items-center gap-3">
-            <Select value={outcome} onValueChange={setOutcome}>
-              <SelectTrigger className="w-[220px]">
-                <SelectValue placeholder="Select outcome..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="didnt_pick_up">Didn&apos;t Pick Up</SelectItem>
-                <SelectItem value="not_interested">Not Interested</SelectItem>
-                <SelectItem value="interested">Interested</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button onClick={handleLogCall} disabled={!outcome || hasLoggedThisCall}>
-              {hasLoggedThisCall ? "Outcome Saved" : "Save Outcome"}
-            </Button>
-            {outcomeSaved && (
-              <span className="flex items-center gap-1 text-sm text-green-600">
-                <CheckCircle size={14} /> Saved
-              </span>
+          <div className="relative min-h-[4rem]">
+            {outcome && !outcomeSaved && !hasLoggedThisCall && (
+              <p className="absolute -top-1 left-0 right-0 text-center text-xs text-green-600 dark:text-green-400 animate-in fade-in duration-200">
+                Click again to save
+              </p>
             )}
+            {outcomeSaved && (
+              <p className="absolute -top-1 left-0 right-0 text-center text-xs text-green-600 dark:text-green-400 flex items-center justify-center gap-1 animate-in fade-in duration-200">
+                <CheckCircle size={12} /> Saved
+              </p>
+            )}
+            <div className="grid grid-cols-4 gap-2 pt-3">
+              {([
+                { value: "didnt_pick_up", label: "Didn't Pick Up", icon: PhoneMissed },
+                { value: "not_interested", label: "Not Interested", icon: ThumbsDown },
+                { value: "interested", label: "Interested", icon: ThumbsUp },
+                { value: "bad_number", label: "Bad Number", icon: PhoneOff },
+              ] as const).map(({ value, label, icon: Icon }) => {
+                const isSelected = outcome === value;
+                const isSaved = hasLoggedThisCall || outcomeSaved;
+                return (
+                  <Button
+                    key={value}
+                    variant="outline"
+                    className={`h-auto flex-col gap-1.5 py-3 text-xs font-medium transition-all ${
+                      isSelected && !isSaved
+                        ? "border-green-500 bg-green-500/10 text-green-700 dark:text-green-400 ring-1 ring-green-500/50"
+                        : isSelected && isSaved
+                        ? "border-green-600 bg-green-500/20 text-green-700 dark:text-green-400"
+                        : ""
+                    }`}
+                    disabled={isSaved && !isSelected}
+                    onClick={() => {
+                      if (isSaved) return;
+                      if (isSelected) {
+                        handleLogCall();
+                      } else {
+                        setOutcome(value);
+                      }
+                    }}
+                  >
+                    <Icon size={16} />
+                    {label}
+                  </Button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -843,17 +968,33 @@ function CallTracker() {
                       {call.call_method === "browser" ? "Browser Call" : "Phone Call"}
                     </Badge>
                   </div>
-                  <Badge
-                    variant={
-                      call.outcome === "interested"
-                        ? "default"
-                        : call.outcome === "not_interested"
-                        ? "destructive"
-                        : "outline"
-                    }
-                  >
-                    {formatOutcome(call.outcome)}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant={
+                        call.outcome === "interested"
+                          ? "default"
+                          : call.outcome === "not_interested" || call.outcome === "bad_number"
+                          ? "destructive"
+                          : "outline"
+                      }
+                    >
+                      {formatOutcome(call.outcome)}
+                    </Badge>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await apiFetch(`/calls/${call.id}`, { method: "DELETE" });
+                          setCalls((prev) => prev.filter((c) => c.id !== call.id));
+                        } catch (err) {
+                          console.error("Failed to delete call log", err);
+                        }
+                      }}
+                      className="text-muted-foreground hover:text-destructive transition-colors"
+                      title="Delete call log"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -907,28 +1048,96 @@ function CallTracker() {
           <p className="text-sm text-muted-foreground">
             Select the outcome for your call with {contact?.first_name} {contact?.last_name}.
           </p>
-          <div className="mt-3">
-            <Select value={outcome} onValueChange={setOutcome}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select outcome..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="didnt_pick_up">Didn&apos;t Pick Up</SelectItem>
-                <SelectItem value="not_interested">Not Interested</SelectItem>
-                <SelectItem value="interested">Interested</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="relative mt-3 min-h-[4.5rem]">
+            {outcome && !outcomeSaved && !hasLoggedThisCall && (
+              <p className="absolute -top-1 left-0 right-0 text-center text-xs text-green-600 dark:text-green-400 animate-in fade-in duration-200">
+                Click again to save
+              </p>
+            )}
+            {outcomeSaved && (
+              <p className="absolute -top-1 left-0 right-0 text-center text-xs text-green-600 dark:text-green-400 flex items-center justify-center gap-1 animate-in fade-in duration-200">
+                <CheckCircle size={12} /> Saved
+              </p>
+            )}
+            <div className="grid grid-cols-4 gap-2 pt-3">
+              {([
+                { value: "didnt_pick_up", label: "Didn't Pick Up", icon: PhoneMissed },
+                { value: "not_interested", label: "Not Interested", icon: ThumbsDown },
+                { value: "interested", label: "Interested", icon: ThumbsUp },
+                { value: "bad_number", label: "Bad Number", icon: PhoneOff },
+              ] as const).map(({ value, label, icon: Icon }) => {
+                const isSelected = outcome === value;
+                const isSaved = hasLoggedThisCall || outcomeSaved;
+                return (
+                  <Button
+                    key={value}
+                    variant="outline"
+                    className={`h-auto flex-col gap-1.5 py-3 text-xs font-medium transition-all ${
+                      isSelected && !isSaved
+                        ? "border-green-500 bg-green-500/10 text-green-700 dark:text-green-400 ring-1 ring-green-500/50"
+                        : isSelected && isSaved
+                        ? "border-green-600 bg-green-500/20 text-green-700 dark:text-green-400"
+                        : ""
+                    }`}
+                    disabled={isSaved && !isSelected}
+                    onClick={() => {
+                      if (isSaved) return;
+                      if (isSelected) {
+                        handleLogCall();
+                      } else {
+                        setOutcome(value);
+                      }
+                    }}
+                  >
+                    <Icon size={16} />
+                    {label}
+                  </Button>
+                );
+              })}
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOutcomeDialogOpen(false)}>
-              Skip
-            </Button>
-            <Button onClick={handleLogCall} disabled={!outcome || hasLoggedThisCall}>
-              Save Outcome
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Bad Number Confirmation */}
+      <AlertDialog open={badNumberDialogOpen} onOpenChange={setBadNumberDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle size={18} className="text-destructive" />
+              Delete phone number?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {badNumberPhoneType
+                ? `This will permanently delete ${lastDialedPhone?.number ?? "this number"} from this contact. Are you sure?`
+                : "Select which phone number to remove:"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {!badNumberPhoneType && (
+            <div className="space-y-2">
+              {phones.filter(([, p]) => p).map(([label, phone, phoneType]) => (
+                <Button
+                  key={phoneType}
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => setLastDialedPhone({ number: phone!, type: phoneType })}
+                >
+                  {label}: {phone}
+                </Button>
+              ))}
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setBadNumberDialogOpen(false)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={handleBadNumberConfirm}
+              disabled={!badNumberPhoneType}
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -976,7 +1185,11 @@ function LocationMultiSelect({
   selected: string[];
   setSelected: (v: string[]) => void;
 }) {
-  const allSelected = options.length > 0 && selected.length === options.length;
+  const [search, setSearch] = useState("");
+  const filtered = search
+    ? options.filter((o) => o.toLowerCase().includes(search.toLowerCase()))
+    : options;
+  const allFilteredSelected = filtered.length > 0 && filtered.every((o) => selected.includes(o));
 
   const toggle = (value: string) => {
     setSelected(
@@ -986,14 +1199,19 @@ function LocationMultiSelect({
     );
   };
 
-  const toggleAll = () => {
-    setSelected(allSelected ? [] : [...options]);
+  const toggleAllFiltered = () => {
+    if (allFilteredSelected) {
+      setSelected(selected.filter((v) => !filtered.includes(v)));
+    } else {
+      const merged = new Set([...selected, ...filtered]);
+      setSelected([...merged]);
+    }
   };
 
   return (
     <div>
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={(open) => { if (!open) setSearch(""); }}>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" className="w-full justify-between text-sm font-normal">
             {selected.length === 0
@@ -1004,20 +1222,36 @@ function LocationMultiSelect({
             <ChevronRight size={14} className="rotate-90 ml-auto opacity-50" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-56 max-h-64 overflow-y-auto">
-          <DropdownMenuCheckboxItem checked={allSelected} onCheckedChange={toggleAll}>
-            Select all
-          </DropdownMenuCheckboxItem>
+        <DropdownMenuContent align="start" className="w-56">
+          <div className="px-2 py-1.5">
+            <Input
+              placeholder={`Search ${label.toLowerCase()}...`}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-8 text-sm"
+              onKeyDown={(e) => e.stopPropagation()}
+            />
+          </div>
           <DropdownMenuSeparator />
-          {options.map((opt) => (
-            <DropdownMenuCheckboxItem
-              key={opt}
-              checked={selected.includes(opt)}
-              onCheckedChange={() => toggle(opt)}
-            >
-              {opt}
+          <div className="max-h-52 overflow-y-auto">
+            <DropdownMenuCheckboxItem checked={allFilteredSelected} onCheckedChange={toggleAllFiltered}>
+              Select all{search ? " matching" : ""}
             </DropdownMenuCheckboxItem>
-          ))}
+            <DropdownMenuSeparator />
+            {filtered.length === 0 ? (
+              <p className="px-2 py-1.5 text-sm text-muted-foreground">No matches</p>
+            ) : (
+              filtered.map((opt) => (
+                <DropdownMenuCheckboxItem
+                  key={opt}
+                  checked={selected.includes(opt)}
+                  onCheckedChange={() => toggle(opt)}
+                >
+                  {opt}
+                </DropdownMenuCheckboxItem>
+              ))
+            )}
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

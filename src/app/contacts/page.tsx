@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import AuthGuard from "@/components/layout/auth-guard";
 import AppSidebar from "@/components/layout/app-sidebar";
 import { apiFetch } from "@/lib/api";
@@ -22,13 +22,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowUpDown } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ArrowUpDown, Search } from "lucide-react";
 import type { Contact, ContactListResponse } from "@/types";
 
 const OUTCOME_LABELS: Record<string, string> = {
   didnt_pick_up: "Didn't pick up",
   not_interested: "Not interested",
   interested: "Interested",
+  bad_number: "Bad number",
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -53,16 +55,28 @@ export default function ContactsPage() {
 }
 
 function ContactsContent() {
+  const router = useRouter();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState("created_at");
   const [sortOrder, setSortOrder] = useState("asc");
   const [outcomeFilter, setOutcomeFilter] = useState<string>("");
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [enrichmentCounts, setEnrichmentCounts] = useState<Record<string, number>>({});
   const [enriching, setEnriching] = useState(false);
   const [creditError, setCreditError] = useState(false);
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 300);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [search]);
 
   const fetchContacts = useCallback(async () => {
     setLoading(true);
@@ -74,6 +88,7 @@ function ContactsContent() {
         per_page: "50",
       });
       if (outcomeFilter) params.set("outcome_filter", outcomeFilter);
+      if (debouncedSearch) params.set("search", debouncedSearch);
 
       const data = await apiFetch<ContactListResponse>(
         `/contacts?${params.toString()}`
@@ -85,7 +100,7 @@ function ContactsContent() {
     } finally {
       setLoading(false);
     }
-  }, [sortBy, sortOrder, outcomeFilter, page]);
+  }, [sortBy, sortOrder, outcomeFilter, debouncedSearch, page]);
 
   const fetchEnrichmentStatus = useCallback(async () => {
     try {
@@ -161,23 +176,34 @@ function ContactsContent() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {total} contacts imported
+            {total} contacts{debouncedSearch ? " matching" : " imported"}
           </p>
         </div>
-        <Select
-          value={outcomeFilter || "all"}
-          onValueChange={(v) => setOutcomeFilter(v === "all" ? "" : v)}
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="didnt_pick_up">Didn&apos;t pick up</SelectItem>
-            <SelectItem value="not_interested">Not interested</SelectItem>
-            <SelectItem value="interested">Interested</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or phone..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-[260px] pl-9 h-9 text-sm"
+            />
+          </div>
+          <Select
+            value={outcomeFilter || "all"}
+            onValueChange={(v) => setOutcomeFilter(v === "all" ? "" : v)}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="didnt_pick_up">Didn&apos;t pick up</SelectItem>
+              <SelectItem value="not_interested">Not interested</SelectItem>
+              <SelectItem value="interested">Interested</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {(enrichmentCounts.pending_enrichment ?? 0) > 0 && (
@@ -255,14 +281,13 @@ function ContactsContent() {
               </TableRow>
             ) : (
               contacts.map((c) => (
-                <TableRow key={c.id} className="cursor-pointer hover:bg-muted/50">
-                  <TableCell>
-                    <Link
-                      href={`/contacts/${c.id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {c.first_name} {c.last_name}
-                    </Link>
+                <TableRow
+                  key={c.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => router.push(`/contacts/${c.id}`)}
+                >
+                  <TableCell className="font-medium">
+                    {c.first_name} {c.last_name}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
                     {c.title || "—"}
