@@ -55,8 +55,9 @@ import {
   ThumbsDown,
   ThumbsUp,
   PhoneOff,
+  CalendarDays,
 } from "lucide-react";
-import type { Contact, Note, CallLog, CallLogResponse } from "@/types";
+import type { Contact, Note, CallLog, CallLogResponse, Settings } from "@/types";
 import Link from "next/link";
 import { Device, Call } from "@twilio/voice-sdk";
 
@@ -116,8 +117,11 @@ function CallTracker() {
   const [badNumberDialogOpen, setBadNumberDialogOpen] = useState(false);
   const [lastDialedPhone, setLastDialedPhone] = useState<{ number: string; type: string } | null>(null);
 
+  const [callbackDate, setCallbackDate] = useState("");
+
   const [locations, setLocations] = useState<LocationOptions>({ cities: [], states: [], countries: [] });
   const [loadingLocations, setLoadingLocations] = useState(true);
+  const [retryDays, setRetryDays] = useState(3);
 
   const viewingHistoryContact =
     historyIndex !== null ? sessionHistory[sessionHistory.length - 1 - historyIndex] ?? null : null;
@@ -131,6 +135,9 @@ function CallTracker() {
       .then(setLocations)
       .catch(() => {})
       .finally(() => setLoadingLocations(false));
+    apiFetch<Settings>("/settings")
+      .then((s) => setRetryDays(s.retry_days))
+      .catch(() => {});
   }, []);
 
   const buildFilterQuery = useCallback(() => {
@@ -143,6 +150,12 @@ function CallTracker() {
     return qs ? `?${qs}` : "";
   }, [filterCities, filterStates, filterCountries, filterBusinessHours]);
 
+  const computeDefaultCallbackDate = useCallback((days: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  }, []);
+
   const claimNext = useCallback(async () => {
     setHistoryIndex(null);
     setLoading(true);
@@ -152,6 +165,7 @@ function CallTracker() {
     setCalls([]);
     setNotes([]);
     setLastDialedPhone(null);
+    setCallbackDate("");
     if (contact) {
       setSessionHistory((prev) => {
         if (prev.some((c) => c.id === contact.id)) return prev;
@@ -324,14 +338,18 @@ function CallTracker() {
   const saveOutcome = async () => {
     if (!displayContact || !outcome) return;
     try {
+      const payload: Record<string, string | null> = {
+        contact_id: displayContact.id,
+        call_method: "browser",
+        phone_number_called: lastDialedPhone?.number ?? displayContact.mobile_phone,
+        outcome,
+      };
+      if (outcome === "didnt_pick_up" && callbackDate) {
+        payload.callback_date = callbackDate;
+      }
       const result = await apiFetch<CallLogResponse>("/calls/log", {
         method: "POST",
-        body: JSON.stringify({
-          contact_id: displayContact.id,
-          call_method: "browser",
-          phone_number_called: lastDialedPhone?.number ?? displayContact.mobile_phone,
-          outcome,
-        }),
+        body: JSON.stringify(payload),
       });
       setCalls((prev) => [result.call_log, ...prev]);
       setOutcomeRequired(false);
@@ -339,17 +357,18 @@ function CallTracker() {
       setOutcomeSaved(true);
       setTimeout(() => setOutcomeSaved(false), 3000);
 
+      const retryAt = result.retry_at ?? null;
       if (isViewingHistory) {
         setSessionHistory((prev) =>
           prev.map((c) =>
             c.id === displayContact.id
-              ? { ...c, call_outcome: outcome, call_occasion_count: result.occasion_count, times_called: result.times_called }
+              ? { ...c, call_outcome: outcome, call_occasion_count: result.occasion_count, times_called: result.times_called, retry_at: retryAt }
               : c
           )
         );
       } else {
         setContact((prev) =>
-          prev ? { ...prev, call_outcome: outcome, call_occasion_count: result.occasion_count, times_called: result.times_called } : prev
+          prev ? { ...prev, call_outcome: outcome, call_occasion_count: result.occasion_count, times_called: result.times_called, retry_at: retryAt } : prev
         );
       }
 
@@ -678,6 +697,12 @@ function CallTracker() {
               <span className="text-xs text-muted-foreground">
                 Called {displayContact.times_called} time{displayContact.times_called !== 1 ? "s" : ""} previously
               </span>
+              {displayContact.retry_at && (
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  <CalendarDays size={10} />
+                  Scheduled: {new Date(displayContact.retry_at).toLocaleDateString()}
+                </span>
+              )}
             </div>
           )}
           <div className="flex items-start justify-between">
@@ -881,6 +906,9 @@ function CallTracker() {
                         handleLogCall();
                       } else {
                         setOutcome(value);
+                        if (value === "didnt_pick_up" && !callbackDate) {
+                          setCallbackDate(computeDefaultCallbackDate(retryDays));
+                        }
                       }
                     }}
                   >
@@ -891,6 +919,31 @@ function CallTracker() {
               })}
             </div>
           </div>
+          {outcome === "didnt_pick_up" && !hasLoggedThisCall && (
+            <div className="mt-4 flex items-center gap-3 border-t border-border pt-4">
+              <CalendarDays size={14} className="text-muted-foreground shrink-0" />
+              <Label htmlFor="callbackDate" className="text-sm whitespace-nowrap">Callback date</Label>
+              <Input
+                id="callbackDate"
+                type="date"
+                value={callbackDate}
+                onChange={(e) => setCallbackDate(e.target.value)}
+                min={new Date().toISOString().slice(0, 10)}
+                className="w-44"
+              />
+              <span className="text-xs text-muted-foreground">
+                {callbackDate
+                  ? `Will re-enter your queue on ${new Date(callbackDate + "T00:00:00").toLocaleDateString()}`
+                  : `Default: ${retryDays} day${retryDays !== 1 ? "s" : ""} from today`}
+              </span>
+            </div>
+          )}
+          {outcome === "didnt_pick_up" && hasLoggedThisCall && displayContact.retry_at && (
+            <div className="mt-4 flex items-center gap-2 border-t border-border pt-4 text-sm text-muted-foreground">
+              <CalendarDays size={14} />
+              Callback scheduled for {new Date(displayContact.retry_at).toLocaleDateString()}
+            </div>
+          )}
         </div>
 
         {/* Notes */}
@@ -1086,6 +1139,9 @@ function CallTracker() {
                         handleLogCall();
                       } else {
                         setOutcome(value);
+                        if (value === "didnt_pick_up" && !callbackDate) {
+                          setCallbackDate(computeDefaultCallbackDate(retryDays));
+                        }
                       }
                     }}
                   >
@@ -1096,6 +1152,20 @@ function CallTracker() {
               })}
             </div>
           </div>
+          {outcome === "didnt_pick_up" && !hasLoggedThisCall && (
+            <div className="flex items-center gap-3 mt-2">
+              <CalendarDays size={14} className="text-muted-foreground shrink-0" />
+              <Label htmlFor="dialogCallbackDate" className="text-sm whitespace-nowrap">Callback date</Label>
+              <Input
+                id="dialogCallbackDate"
+                type="date"
+                value={callbackDate}
+                onChange={(e) => setCallbackDate(e.target.value)}
+                min={new Date().toISOString().slice(0, 10)}
+                className="w-44"
+              />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
       {/* Bad Number Confirmation */}

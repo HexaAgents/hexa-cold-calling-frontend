@@ -127,36 +127,63 @@ Three sections below the contact info: Call History (date + method + outcome bad
 
 The most complex page. Shows one contact at a time with navigation, dialing, notes, and SMS.
 
-### State (lines 66–78)
+### State
 
-- `contacts`: Full list loaded on mount (up to 200, sorted by created_at asc)
-- `index`: Current position in the list
+**Persisted (via `usePersistedState` / `sessionStorage`):**
+- `contact`: The currently claimed contact (from `POST /calls/next`)
 - `notes`, `calls`: Data for the current contact
-- `outcome`: Selected call outcome from the dropdown
-- `newNote`, `editingNote`, `editContent`: Note creation/editing state
-- `smsDialogOpen`, `scheduledDate`: SMS dialog state
-- `outcomeRequired`: Set to true after a call button is clicked — prevents navigating to next contact without selecting an outcome
+- `outcome`: Selected call outcome
+- `outcomeRequired`, `outcomeSaved`: Call-flow state — prevents navigating without recording an outcome
+- `started`: Whether the user has started calling (past the filter screen)
+- `filterCities`, `filterStates`, `filterCountries`, `filterBusinessHours`: Location filters
+- `sessionHistory`: Previously viewed contacts (for back/forward navigation)
+- `historyIndex`: Position in session history
 
-### Navigation (lines 257–274)
+**Transient:**
+- `newNote`, `editingNote`, `editContent`: Note CRUD
+- `smsDialogOpen`, `scheduledDate`: SMS dialog
+- `callbackDate`: Per-contact callback date (ISO string, shown when outcome is `didnt_pick_up`)
+- `retryDays`: Default retry interval from `GET /settings` — used to pre-fill `callbackDate`
+- Twilio state: `twilioDevice`, `activeCall`, `callStatus`
 
-- **Previous**: Decrements `index` (disabled at 0)
-- **Next**: Increments `index` (requires outcome if `outcomeRequired` is true). At the end of the list, shows "Import more" button linking to `/import`.
+### Pre-Start Screen
 
-### Phone Numbers Section (lines 299–333)
+Location filters (country / state / city multi-selects from `GET /contacts/locations`), optional "business hours only" checkbox, then "Start Calling" button.
+
+### Claiming the Next Lead
+
+`claimNext` calls `POST /calls/next` with location query params. The response is a `Contact | null`; `null` means the queue is empty. Before claiming, the current contact is appended to `sessionHistory` for back/forward navigation.
+
+### Settings Fetch
+
+On mount, fetches `GET /settings` to obtain `retry_days` (default callback interval). This value is used to compute the default `callbackDate` when the user selects "Didn't Pick Up".
+
+### Phone Numbers Section
 
 Renders all non-null phone numbers (Mobile, Work, Corporate) with two buttons each:
-- **Browser**: Initiates a WebRTC call via Twilio Client SDK (currently shows an alert placeholder)
-- **Phone**: Initiates a bridge call (currently shows an alert placeholder)
+- **Browser**: Initiates a WebRTC call via Twilio Client SDK
+- **Phone**: Bridge call (placeholder)
 
 Both set `outcomeRequired = true` so the user must record an outcome.
 
-### Call Outcome Section (lines 336–354)
+### Call Outcome Section
 
-A required dropdown with three options. The "Save outcome" button calls `POST /calls/log` with the contact ID, method, phone number, and selected outcome. The response includes:
+Four outcome buttons: "Didn't Pick Up", "Not Interested", "Interested", "Bad Number". First click selects, second click saves. Calls `POST /calls/log` with the contact ID, method, phone number, outcome, and optionally `callback_date`.
+
+**Callback Date Picker:** When "Didn't Pick Up" is selected, a date input appears below the outcome buttons, pre-filled with `today + retry_days`. The user can edit this date to schedule a custom callback. The chosen date is sent as `callback_date` in the API request. After saving, the confirmed `retry_at` is displayed. On the scheduled date, the contact automatically re-enters the same caller's queue via the `claim_next_contact` RPC.
+
+The same callback date picker also appears in the **Outcome Prompt Dialog** (modal that appears after a call ends via Twilio).
+
+The response includes:
 - `sms_prompt_needed`: If true, opens the SMS dialog
-- `occasion_count`: Updates the contact's display count
+- `occasion_count` / `times_called`: Updates the contact's display counts
+- `retry_at`: Confirmed callback date (displayed in the UI)
 
-### Notes Section (lines 357–408)
+### Contact Card
+
+Displays contact info, score, company description, and a "Callback" badge with the scheduled retry date when `retry_at` is set.
+
+### Notes Section
 
 Full CRUD:
 - **Add**: Textarea + Plus button → `POST /contacts/{id}/notes`
@@ -165,7 +192,7 @@ Full CRUD:
 
 Notes are displayed newest-first with dates.
 
-### SMS Dialog (lines 420–456)
+### SMS Dialog
 
 A modal dialog that appears when `sms_prompt_needed` is true. Two options:
 - **Send now**: Calls `POST /sms/send` immediately
@@ -201,8 +228,9 @@ On mount, fetches `GET /settings` and populates the form fields.
 ### Form Fields
 
 - **SMS threshold**: Number input (1–100) — how many call occasions before the SMS prompt appears
+- **Retry days**: Number input (1–90) — default number of days before a "didn't pick up" contact reappears in the same caller's queue. This is the default used when the caller does not specify a custom callback date in the call tracker.
 - **SMS template**: Textarea with placeholder variables shown as badges: `<first_name>`, `<last_name>`, `<company_name>`, `<title>`, `<website>`
 
-### Save (lines 57–70)
+### Save
 
-Calls `PUT /settings` with the current threshold and template values. Shows a green "Saved" confirmation for 3 seconds after success.
+Calls `PUT /settings` with the current threshold, retry_days, and template values. Shows a green "Saved" confirmation for 3 seconds after success.

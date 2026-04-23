@@ -31,6 +31,7 @@ export interface Contact {
   sms_sent_after_calls: number | null;
   sms_scheduled_at: string | null;
   enrichment_status: string | null;
+  retry_at: string | null;
   created_at: string | null;
 }
 
@@ -58,6 +59,7 @@ export interface CallLogResponse {
   sms_prompt_needed: boolean;
   occasion_count: number;
   times_called: number;
+  retry_at: string | null;
 }
 
 export interface Note {

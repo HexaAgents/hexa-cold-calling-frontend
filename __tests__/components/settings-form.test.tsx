@@ -13,6 +13,7 @@ describe("SettingsPage", () => {
         return {
           id: "s1",
           sms_call_threshold: 3,
+          retry_days: 3,
           sms_template: "Hi <first_name>, this is Hexa.",
         };
       }
@@ -31,7 +32,10 @@ describe("SettingsPage", () => {
   it("loads settings from API", async () => {
     render(<SettingsPage />);
     await waitFor(() => {
-      expect(screen.getByDisplayValue("3")).toBeInTheDocument();
+      const thresholdInput = screen.getByLabelText("Auto-SMS after N call occasions") as HTMLInputElement;
+      expect(thresholdInput.value).toBe("3");
+      const retryInput = screen.getByLabelText(/Retry.*after N days/) as HTMLInputElement;
+      expect(retryInput.value).toBe("3");
       expect(screen.getByDisplayValue("Hi <first_name>, this is Hexa.")).toBeInTheDocument();
     });
   });
