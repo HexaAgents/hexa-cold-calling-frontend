@@ -7,12 +7,14 @@ interface HexaLogoProps {
   size?: number;
   showText?: boolean;
   textClassName?: string;
+  variant?: "dark" | "light";
 }
 
 export default function HexaLogo({
   size = 32,
   showText = false,
   textClassName = "",
+  variant = "dark",
 }: HexaLogoProps) {
   return (
     <div className="flex items-center gap-2">
@@ -21,7 +23,7 @@ export default function HexaLogo({
         alt="Hexa"
         width={size}
         height={size}
-        className="rounded-lg"
+        className={cn("rounded-lg", variant === "light" && "invert")}
       />
       {showText && (
         <span className={cn("font-semibold tracking-tight", textClassName)}>

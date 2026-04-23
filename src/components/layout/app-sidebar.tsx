@@ -55,7 +55,7 @@ export default function AppSidebar({ user }: AppSidebarProps) {
   return (
     <aside className="side-pane-dark flex h-full w-[248px] flex-shrink-0 flex-col border-r border-white/15">
       <div className="px-4 pb-6 pt-5">
-        <HexaLogo size={24} showText textClassName="text-base text-white" />
+        <HexaLogo size={24} showText variant="light" textClassName="text-base text-white" />
       </div>
 
       <nav className="flex-1 space-y-1 px-2 overflow-y-auto">
