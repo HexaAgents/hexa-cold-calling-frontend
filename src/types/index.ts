@@ -21,6 +21,7 @@ export interface Contact {
   rationale: string | null;
   rejection_reason: string | null;
   company_description: string | null;
+  industry_tag: string | null;
   exa_scrape_success: boolean;
   scoring_failed: boolean;
   call_occasion_count: number;

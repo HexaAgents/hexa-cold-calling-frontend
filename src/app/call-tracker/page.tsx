@@ -739,6 +739,11 @@ function CallTracker() {
               <Badge variant="outline" className="mt-1">
                 {displayContact.company_type || "unscored"}
               </Badge>
+              {displayContact.industry_tag && (
+                <Badge variant="secondary" className="mt-1">
+                  {displayContact.industry_tag}
+                </Badge>
+              )}
             </div>
           </div>
 
