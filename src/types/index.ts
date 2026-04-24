@@ -33,7 +33,6 @@ export interface Contact {
   sms_scheduled_at: string | null;
   enrichment_status: string | null;
   retry_at: string | null;
-  hidden: boolean;
   created_at: string | null;
 }
 
