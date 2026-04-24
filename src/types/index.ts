@@ -58,6 +58,7 @@ export interface CallLog {
 export interface CallLogResponse {
   call_log: CallLog;
   sms_prompt_needed: boolean;
+  email_prompt_needed: boolean;
   occasion_count: number;
   times_called: number;
   retry_at: string | null;
@@ -84,6 +85,22 @@ export interface Settings {
   sms_call_threshold: number;
   sms_template: string;
   retry_days: number;
+  email_template_didnt_pick_up: string;
+  email_template_interested: string;
+  email_subject_didnt_pick_up: string;
+  email_subject_interested: string;
+}
+
+export interface EmailLog {
+  id: string;
+  contact_id: string;
+  user_id: string;
+  gmail_address: string;
+  recipient_email: string;
+  subject: string;
+  body: string;
+  outcome_context: string | null;
+  sent_at: string;
 }
 
 export interface ImportBatch {

@@ -56,8 +56,9 @@ import {
   ThumbsUp,
   PhoneOff,
   CalendarDays,
+  Mail,
 } from "lucide-react";
-import type { Contact, Note, CallLog, CallLogResponse, CallLogDeleteResponse, Settings, User } from "@/types";
+import type { Contact, Note, CallLog, CallLogResponse, CallLogDeleteResponse, EmailLog, Settings, User } from "@/types";
 import Link from "next/link";
 import { Device, Call } from "@twilio/voice-sdk";
 
@@ -125,6 +126,15 @@ function CallTracker({ user }: { user: User }) {
   const [loadingLocations, setLoadingLocations] = useState(true);
   const [retryDays, setRetryDays] = useState(3);
 
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [emailOutcomeContext, setEmailOutcomeContext] = useState<string | null>(null);
+  const [emailLogs, setEmailLogs] = useState<EmailLog[]>([]);
+  const [gmailConnected, setGmailConnected] = useState(false);
+
   const viewingHistoryContact =
     historyIndex !== null ? sessionHistory[sessionHistory.length - 1 - historyIndex] ?? null : null;
   const displayContact = viewingHistoryContact ?? contact;
@@ -139,6 +149,9 @@ function CallTracker({ user }: { user: User }) {
       .finally(() => setLoadingLocations(false));
     apiFetch<Settings>("/settings")
       .then((s) => setRetryDays(s.retry_days))
+      .catch(() => {});
+    apiFetch<{ connected: boolean }>("/email/oauth/status")
+      .then((s) => setGmailConnected(s.connected))
       .catch(() => {});
   }, []);
 
@@ -251,13 +264,15 @@ function CallTracker({ user }: { user: User }) {
 
     let cancelled = false;
     (async () => {
-      const [n, c] = await Promise.all([
+      const [n, c, e] = await Promise.all([
         apiFetch<Note[]>(`/contacts/${displayContactId}/notes`).catch(() => []),
         apiFetch<CallLog[]>(`/calls/contact/${displayContactId}`).catch(() => []),
+        apiFetch<EmailLog[]>(`/email/logs/${displayContactId}`).catch(() => []),
       ]);
       if (cancelled) return;
       setNotes(n);
       setCalls(c);
+      setEmailLogs(e);
     })();
     return () => {
       cancelled = true;
@@ -424,6 +439,22 @@ function CallTracker({ user }: { user: User }) {
       if (result.sms_prompt_needed) {
         setSmsDialogOpen(true);
       }
+
+      if (result.email_prompt_needed && gmailConnected) {
+        const templateKey = outcome === "interested" ? "interested" : "didnt_pick_up";
+        try {
+          const draft = await apiFetch<{ to: string; subject: string; body: string }>("/email/draft", {
+            method: "POST",
+            body: JSON.stringify({ contact_id: displayContact.id, template_key: templateKey }),
+          });
+          setEmailSubject(draft.subject);
+          setEmailBody(draft.body);
+          setEmailOutcomeContext(outcome);
+          setEmailDialogOpen(true);
+        } catch {
+          // Template may be empty, that's fine
+        }
+      }
     } catch (err) {
       console.error(err);
     }
@@ -537,6 +568,51 @@ function CallTracker({ user }: { user: User }) {
       setScheduledDate("");
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleOpenEmailCompose = async (templateKey?: string) => {
+    if (!displayContact?.email) return;
+    const key = templateKey || "didnt_pick_up";
+    try {
+      const draft = await apiFetch<{ to: string; subject: string; body: string }>("/email/draft", {
+        method: "POST",
+        body: JSON.stringify({ contact_id: displayContact.id, template_key: key }),
+      });
+      setEmailSubject(draft.subject);
+      setEmailBody(draft.body);
+      setEmailOutcomeContext(null);
+      setEmailDialogOpen(true);
+    } catch {
+      setEmailSubject("");
+      setEmailBody("");
+      setEmailOutcomeContext(null);
+      setEmailDialogOpen(true);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!displayContact) return;
+    setEmailSending(true);
+    try {
+      const result = await apiFetch<{ email_log: EmailLog }>("/email/send", {
+        method: "POST",
+        body: JSON.stringify({
+          contact_id: displayContact.id,
+          subject: emailSubject,
+          body: emailBody,
+          outcome_context: emailOutcomeContext,
+        }),
+      });
+      setEmailLogs((prev) => [result.email_log, ...prev]);
+      setEmailDialogOpen(false);
+      setEmailSent(true);
+      setTimeout(() => setEmailSent(false), 3000);
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof Error ? err.message : "Failed to send email");
+    } finally {
+      setEmailSending(false);
     }
   };
 
@@ -656,7 +732,7 @@ function CallTracker({ user }: { user: User }) {
               <Clock size={14} className="text-muted-foreground" />
               <span>
                 Only contacts in business hours now
-                <span className="text-muted-foreground"> (8am&ndash;12pm, 2pm&ndash;6pm local)</span>
+                <span className="text-muted-foreground"> (8am&ndash;12pm, 2pm&ndash;5pm local)</span>
               </span>
             </span>
           </label>
@@ -859,6 +935,21 @@ function CallTracker({ user }: { user: User }) {
               <div>
                 <p className="text-xs text-muted-foreground">Email</p>
                 <p>{displayContact.email}</p>
+                {gmailConnected && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-1.5 h-7 text-xs"
+                    onClick={() => handleOpenEmailCompose()}
+                  >
+                    <Mail size={11} className="mr-1" /> Send Email
+                  </Button>
+                )}
+                {emailSent && (
+                  <span className="flex items-center gap-1 text-xs text-green-600 mt-1">
+                    <CheckCircle size={10} /> Email sent
+                  </span>
+                )}
               </div>
             )}
             {displayContact.website && (
@@ -1217,7 +1308,88 @@ function CallTracker({ user }: { user: User }) {
             </div>
           </div>
         )}
+
+        {/* Email History */}
+        {emailLogs.length > 0 && (
+          <div className="border border-border bg-card p-6">
+            <h2 className="text-sm font-semibold mb-3">Email History</h2>
+            <div className="space-y-2">
+              {emailLogs.map((log) => (
+                <div
+                  key={log.id}
+                  className="py-2 border-b border-border last:border-0 text-sm"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Mail size={12} className="text-muted-foreground" />
+                      <span className="text-muted-foreground">
+                        {new Date(log.sent_at).toLocaleDateString()}
+                      </span>
+                      <span className="font-medium truncate max-w-[200px]">{log.subject}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">{log.gmail_address}</span>
+                      {log.outcome_context && (
+                        <Badge variant="outline" className="text-xs">{log.outcome_context}</Badge>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2 pl-7">{log.body}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Email Compose Dialog */}
+      <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail size={16} /> Send Email to {displayContact?.first_name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="emailTo" className="text-xs text-muted-foreground">To</Label>
+              <p className="text-sm font-medium">{displayContact?.email}</p>
+            </div>
+            <div>
+              <Label htmlFor="emailSubject">Subject</Label>
+              <Input
+                id="emailSubject"
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+                placeholder="Email subject"
+              />
+            </div>
+            <div>
+              <Label htmlFor="emailBody">Message</Label>
+              <Textarea
+                id="emailBody"
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                rows={8}
+                placeholder="Write your email..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendEmail}
+              disabled={emailSending || !emailSubject || !emailBody}
+            >
+              {emailSending ? "Sending..." : (
+                <><Send size={14} className="mr-1" /> Send Email</>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* SMS Dialog */}
       <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
@@ -1409,7 +1581,7 @@ function LocalTime({ timezone }: { timezone: string }) {
   const hour = Number(
     new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: timezone }).format(now)
   );
-  const inBusinessHours = (hour >= 8 && hour < 12) || (hour >= 14 && hour < 18);
+  const inBusinessHours = (hour >= 8 && hour < 12) || (hour >= 14 && hour < 17);
 
   return (
     <span className={inBusinessHours ? "text-green-600 dark:text-green-400" : undefined}>
