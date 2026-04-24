@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, type RefObject } from "react";
 import { useSearchParams } from "next/navigation";
 import AuthGuard from "@/components/layout/auth-guard";
 import AppSidebar from "@/components/layout/app-sidebar";
@@ -9,10 +9,65 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { CheckCircle, Lock, Mail, Unlink, MessageSquare, Phone, RotateCcw } from "lucide-react";
+import { CheckCircle, Lock, Mail, Unlink, MessageSquare, Phone, RotateCcw, ChevronDown } from "lucide-react";
 import type { Settings } from "@/types";
+
+const MAIN_VARIABLES = ["<first_name>", "<company_name>", "<your_name>", "<type>"];
+const ADVANCED_VARIABLES = ["<last_name>", "<title>", "<website>"];
+const ALL_VARIABLES = [...MAIN_VARIABLES, ...ADVANCED_VARIABLES];
+
+function insertAtCursor(ref: RefObject<HTMLTextAreaElement | null>, value: string, setter: (v: string) => void) {
+  const el = ref.current;
+  if (!el) return;
+  const start = el.selectionStart ?? el.value.length;
+  const end = el.selectionEnd ?? start;
+  const before = el.value.slice(0, start);
+  const after = el.value.slice(end);
+  const updated = before + value + after;
+  setter(updated);
+  requestAnimationFrame(() => {
+    el.focus();
+    const pos = start + value.length;
+    el.setSelectionRange(pos, pos);
+  });
+}
+
+function VariableButtons({
+  textareaRef,
+  setter,
+}: {
+  textareaRef: RefObject<HTMLTextAreaElement | null>;
+  setter: (v: string) => void;
+}) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const displayed = showAdvanced ? ALL_VARIABLES : MAIN_VARIABLES;
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1">
+        {displayed.map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => insertAtCursor(textareaRef, v, setter)}
+            className="inline-flex items-center rounded border border-border bg-muted/50 px-2 py-0.5 text-xs font-mono text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground hover:border-primary cursor-pointer"
+          >
+            {v}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="inline-flex items-center gap-0.5 rounded px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {showAdvanced ? "Less" : "More"}
+          <ChevronDown size={11} className={`transition-transform ${showAdvanced ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   return (
@@ -146,6 +201,10 @@ function SettingsContent() {
     }
   };
 
+  const smsTemplateRef = useRef<HTMLTextAreaElement>(null);
+  const emailBodyDPURef = useRef<HTMLTextAreaElement>(null);
+  const emailBodyIntRef = useRef<HTMLTextAreaElement>(null);
+
   const handleChangePassword = async () => {
     setPasswordError("");
     if (!currentPassword || !newPassword) {
@@ -178,11 +237,16 @@ function SettingsContent() {
     }
   };
 
-  const templateVariables = ["<first_name>", "<last_name>", "<company_name>", "<title>", "<website>", "<your_name>", "<type>"];
-
   if (loading) {
     return <div className="flex items-center justify-center h-full text-muted-foreground">Loading...</div>;
   }
+
+  const sections = [
+    { id: "calling", label: "Calling" },
+    { id: "gmail", label: "Gmail" },
+    { id: "templates", label: "Email Templates" },
+    { id: "security", label: "Security" },
+  ];
 
   return (
     <div className="flex justify-center py-10 px-6">
@@ -192,10 +256,21 @@ function SettingsContent() {
           <p className="text-sm text-muted-foreground mt-1">
             Manage your calling preferences, email integration, and account.
           </p>
+          <nav className="flex gap-1 mt-4">
+            {sections.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => document.getElementById(s.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                className="px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              >
+                {s.label}
+              </button>
+            ))}
+          </nav>
         </div>
 
         {/* Calling Preferences */}
-        <section className="rounded-lg border border-border bg-card overflow-hidden">
+        <section id="calling" className="rounded-lg border border-border bg-card overflow-hidden scroll-mt-6">
           <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border bg-muted/30">
             <Phone size={15} className="text-muted-foreground" />
             <h2 className="text-sm font-semibold">Calling Preferences</h2>
@@ -240,17 +315,12 @@ function SettingsContent() {
               <Label htmlFor="template">SMS Template</Label>
               <Textarea
                 id="template"
+                ref={smsTemplateRef}
                 value={template}
                 onChange={(e) => setTemplate(e.target.value)}
                 rows={3}
               />
-              <div className="flex flex-wrap gap-1 mt-1.5">
-                {templateVariables.map((v) => (
-                  <Badge key={v} variant="outline" className="text-xs font-mono">
-                    {v}
-                  </Badge>
-                ))}
-              </div>
+              <VariableButtons textareaRef={smsTemplateRef} setter={setTemplate} />
             </div>
 
             <div className="flex items-center gap-3 pt-1">
@@ -265,7 +335,7 @@ function SettingsContent() {
         </section>
 
         {/* Gmail Connection */}
-        <section className="rounded-lg border border-border bg-card overflow-hidden">
+        <section id="gmail" className="rounded-lg border border-border bg-card overflow-hidden scroll-mt-6">
           <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border bg-muted/30">
             <Mail size={15} className="text-muted-foreground" />
             <h2 className="text-sm font-semibold">Gmail Connection</h2>
@@ -300,14 +370,14 @@ function SettingsContent() {
         </section>
 
         {/* Email Templates */}
-        <section className="rounded-lg border border-border bg-card overflow-hidden">
+        <section id="templates" className="rounded-lg border border-border bg-card overflow-hidden scroll-mt-6">
           <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border bg-muted/30">
             <MessageSquare size={15} className="text-muted-foreground" />
             <h2 className="text-sm font-semibold">Email Templates</h2>
           </div>
           <div className="p-6 space-y-6">
             <p className="text-xs text-muted-foreground">
-              Default templates for follow-up emails. Users can edit before sending.
+              Default templates for follow-up emails. Click a variable tag to insert it at your cursor position. Users can edit before sending.
             </p>
 
             <div className="space-y-2">
@@ -331,11 +401,13 @@ function SettingsContent() {
                   <Label htmlFor="emailTemplateDPU" className="text-xs">Email body</Label>
                   <Textarea
                     id="emailTemplateDPU"
+                    ref={emailBodyDPURef}
                     value={emailTemplateDidntPickUp}
                     onChange={(e) => setEmailTemplateDidntPickUp(e.target.value)}
                     rows={4}
                     placeholder="Hi <first_name>, I tried reaching you by phone..."
                   />
+                  <VariableButtons textareaRef={emailBodyDPURef} setter={setEmailTemplateDidntPickUp} />
                 </div>
               </div>
             </div>
@@ -363,25 +435,18 @@ function SettingsContent() {
                   <Label htmlFor="emailTemplateInt" className="text-xs">Email body</Label>
                   <Textarea
                     id="emailTemplateInt"
+                    ref={emailBodyIntRef}
                     value={emailTemplateInterested}
                     onChange={(e) => setEmailTemplateInterested(e.target.value)}
                     rows={4}
                     placeholder="Hi <first_name>, great speaking with you today..."
                   />
+                  <VariableButtons textareaRef={emailBodyIntRef} setter={setEmailTemplateInterested} />
                 </div>
               </div>
             </div>
 
             <Separator />
-
-            <div className="flex flex-wrap gap-1">
-              <span className="text-xs text-muted-foreground mr-1.5 self-center">Variables:</span>
-              {templateVariables.map((v) => (
-                <Badge key={v} variant="outline" className="text-xs font-mono">
-                  {v}
-                </Badge>
-              ))}
-            </div>
 
             <div className="flex items-center gap-3">
               <Button onClick={handleSaveEmailTemplates} size="sm">Save templates</Button>
@@ -395,7 +460,7 @@ function SettingsContent() {
         </section>
 
         {/* Account Security */}
-        <section className="rounded-lg border border-border bg-card overflow-hidden">
+        <section id="security" className="rounded-lg border border-border bg-card overflow-hidden scroll-mt-6">
           <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border bg-muted/30">
             <Lock size={15} className="text-muted-foreground" />
             <h2 className="text-sm font-semibold">Change Password</h2>

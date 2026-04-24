@@ -136,6 +136,8 @@ function CallTracker({ user }: { user: User }) {
   const [emailLogs, setEmailLogs] = useState<EmailLog[]>([]);
   const [gmailConnected, setGmailConnected] = useState(false);
 
+  const [outsideBusinessHours, setOutsideBusinessHours] = useState(false);
+
   const viewingHistoryContact =
     historyIndex !== null ? sessionHistory[sessionHistory.length - 1 - historyIndex] ?? null : null;
   const displayContact = viewingHistoryContact ?? contact;
@@ -281,6 +283,27 @@ function CallTracker({ user }: { user: User }) {
     // Only re-run when the displayed contact id changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayContactId]);
+
+  useEffect(() => {
+    const checkBusinessHours = () => {
+      if (!displayContact?.timezone || displayContact.call_outcome) {
+        setOutsideBusinessHours(false);
+        return;
+      }
+      try {
+        const hour = Number(
+          new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: displayContact.timezone }).format(new Date())
+        );
+        const inBizHours = (hour >= 8 && hour < 12) || (hour >= 14 && hour < 17);
+        setOutsideBusinessHours(!inBizHours);
+      } catch {
+        setOutsideBusinessHours(false);
+      }
+    };
+    checkBusinessHours();
+    const interval = setInterval(checkBusinessHours, 30_000);
+    return () => clearInterval(interval);
+  }, [displayContactId, displayContact?.timezone, displayContact?.call_outcome]);
 
   const handleBack = () => {
     if (!canGoBack) return;
@@ -509,6 +532,8 @@ function CallTracker({ user }: { user: User }) {
   const hasLoggedThisCall = displayContact
     ? savedContactIds.includes(displayContact.id)
     : false;
+
+  const isDisabledByHours = outsideBusinessHours && !displayContact?.call_outcome && !hasLoggedThisCall;
 
   const handleDeleteCallLog = async (callId: string) => {
     try {
@@ -865,7 +890,22 @@ function CallTracker({ user }: { user: User }) {
         )}
       </div>
 
-      <div className="space-y-6">
+      {isDisabledByHours && (
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4">
+          <Clock size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">Outside business hours</p>
+            <p className="text-xs text-amber-700 dark:text-amber-400">
+              It&apos;s currently outside business hours for this contact. Skip to the next contact or come back later.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" className="ml-auto shrink-0" onClick={handleNext}>
+            Skip <ChevronRight size={14} className="ml-1" />
+          </Button>
+        </div>
+      )}
+
+      <div className={`space-y-6 ${isDisabledByHours ? "opacity-50 pointer-events-none select-none" : ""}`}>
         {/* Contact Card */}
         <div className="border border-border bg-card p-6">
           {displayContact.times_called > 0 && (

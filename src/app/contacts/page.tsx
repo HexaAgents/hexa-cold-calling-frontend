@@ -290,15 +290,23 @@ function ContactsContent() {
                 className="group rounded-lg border border-border bg-card p-5 cursor-pointer transition-all hover:border-primary/40 hover:shadow-sm"
               >
                 {/* Top row: name + score */}
-                <div className="flex items-start justify-between gap-3 mb-3">
+                <div className="flex items-start justify-between gap-3 mb-2">
                   <div className="min-w-0">
                     <h3 className="font-semibold truncate group-hover:text-primary transition-colors">
                       {c.first_name} {c.last_name}
                     </h3>
-                    {c.title && (
-                      <p className="text-xs text-muted-foreground truncate mt-0.5">
-                        {c.title}
-                      </p>
+                    {(c.title || c.company_name) && (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {c.title && (
+                          <Badge variant="secondary" className="text-[10px] h-5 font-normal">
+                            {c.title}
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-[10px] h-5 font-normal gap-1">
+                          <Building2 size={9} />
+                          {c.company_name}
+                        </Badge>
+                      </div>
                     )}
                   </div>
                   <div className="flex flex-col items-end shrink-0">
@@ -311,12 +319,6 @@ function ContactsContent() {
                       </span>
                     )}
                   </div>
-                </div>
-
-                {/* Company row */}
-                <div className="flex items-center gap-1.5 text-sm mb-2">
-                  <Building2 size={12} className="text-muted-foreground shrink-0" />
-                  <span className="truncate">{c.company_name}</span>
                 </div>
 
                 {/* Info grid */}
