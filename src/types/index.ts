@@ -64,6 +64,12 @@ export interface CallLogResponse {
   retry_at: string | null;
 }
 
+export interface CallLogDeleteResponse {
+  contact_id: string;
+  times_called: number;
+  call_outcome: string | null;
+}
+
 export interface Note {
   id: string;
   contact_id: string;

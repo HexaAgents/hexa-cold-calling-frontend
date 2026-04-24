@@ -57,7 +57,7 @@ import {
   PhoneOff,
   CalendarDays,
 } from "lucide-react";
-import type { Contact, Note, CallLog, CallLogResponse, Settings } from "@/types";
+import type { Contact, Note, CallLog, CallLogResponse, CallLogDeleteResponse, Settings, User } from "@/types";
 import Link from "next/link";
 import { Device, Call } from "@twilio/voice-sdk";
 
@@ -69,7 +69,7 @@ export default function CallTrackerPage() {
           <AppSidebar user={user} />
           <main className="relative flex-1 overflow-y-auto bg-background">
             <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-primary/30 via-primary/70 to-primary/30" />
-            <CallTracker />
+            <CallTracker user={user} />
           </main>
         </div>
       )}
@@ -83,15 +83,14 @@ interface LocationOptions {
   countries: string[];
 }
 
-function CallTracker() {
+function CallTracker({ user }: { user: User }) {
   // Persisted across navigation so the user returns to where they left off.
   const [contact, setContact] = usePersistedState<Contact | null>("callTracker:contact", null);
   const [notes, setNotes] = usePersistedState<Note[]>("callTracker:notes", []);
   const [calls, setCalls] = usePersistedState<CallLog[]>("callTracker:calls", []);
   const [outcome, setOutcome] = usePersistedState<string>("callTracker:outcome", "");
   const [outcomeRequired, setOutcomeRequired] = usePersistedState<boolean>("callTracker:outcomeRequired", false);
-  const [outcomeSaved, setOutcomeSaved] = usePersistedState<boolean>("callTracker:outcomeSaved", false);
-  const [callLoggedThisSession, setCallLoggedThisSession] = usePersistedState<boolean>("callTracker:callLoggedThisSession", false);
+  const [savedContactIds, setSavedContactIds] = usePersistedState<string[]>("callTracker:savedContactIds", []);
   const [started, setStarted] = usePersistedState<boolean>("callTracker:started", false);
   const [filterCities, setFilterCities] = usePersistedState<string[]>("callTracker:filterCities", []);
   const [filterStates, setFilterStates] = usePersistedState<string[]>("callTracker:filterStates", []);
@@ -118,6 +117,8 @@ function CallTracker() {
   const [badNumberDialogOpen, setBadNumberDialogOpen] = useState(false);
   const [lastDialedPhone, setLastDialedPhone] = useState<{ number: string; type: string } | null>(null);
 
+  const [outcomeSaved, setOutcomeSaved] = useState(false);
+  const [callbackDateSaved, setCallbackDateSaved] = useState(false);
   const [callbackDate, setCallbackDate] = useState("");
 
   const [locations, setLocations] = useState<LocationOptions>({ cities: [], states: [], countries: [] });
@@ -162,7 +163,7 @@ function CallTracker() {
     setLoading(true);
     setOutcome("");
     setOutcomeSaved(false);
-    setCallLoggedThisSession(false);
+    setCallbackDateSaved(false);
     setOutcomeRequired(false);
     setCalls([]);
     setNotes([]);
@@ -211,10 +212,15 @@ function CallTracker() {
     if (idChanged) {
       setOutcome(displayContact.call_outcome || "");
       setOutcomeSaved(false);
-      setCallLoggedThisSession(false);
+      setCallbackDateSaved(false);
       setOutcomeRequired(false);
       setNewNote("");
       setEditingNote(null);
+      if (displayContact.call_outcome === "didnt_pick_up" && displayContact.retry_at) {
+        setCallbackDate(displayContact.retry_at.slice(0, 10));
+      } else {
+        setCallbackDate("");
+      }
     }
 
     let cancelled = false;
@@ -368,8 +374,10 @@ function CallTracker() {
       setCalls((prev) => [result.call_log, ...prev]);
       setOutcomeRequired(false);
       setOutcomeDialogOpen(false);
+      setSavedContactIds((prev) =>
+        prev.includes(displayContact.id) ? prev : [...prev, displayContact.id]
+      );
       setOutcomeSaved(true);
-      setCallLoggedThisSession(true);
       setTimeout(() => setOutcomeSaved(false), 3000);
 
       const retryAt = result.retry_at ?? null;
@@ -392,6 +400,27 @@ function CallTracker() {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleUpdateCallbackDate = async (newDate: string) => {
+    if (!displayContact || !newDate) return;
+    try {
+      await apiFetch(`/contacts/${displayContact.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ retry_at: newDate }),
+      });
+      const updateRetryAt = (c: Contact) =>
+        c.id === displayContact.id ? { ...c, retry_at: newDate } : c;
+      if (isViewingHistory) {
+        setSessionHistory((prev) => prev.map(updateRetryAt));
+      } else {
+        setContact((prev) => (prev ? updateRetryAt(prev) : prev));
+      }
+      setCallbackDateSaved(true);
+      setTimeout(() => setCallbackDateSaved(false), 2000);
+    } catch (err) {
+      console.error("Failed to update callback date", err);
     }
   };
 
@@ -419,9 +448,41 @@ function CallTracker() {
     await claimNext();
   };
 
-  const hasLoggedThisCall = isViewingHistory
-    ? outcomeSaved
-    : outcomeSaved || callLoggedThisSession;
+  const hasLoggedThisCall = displayContact
+    ? savedContactIds.includes(displayContact.id)
+    : false;
+
+  const handleDeleteCallLog = async (callId: string) => {
+    try {
+      const res = await apiFetch<CallLogDeleteResponse>(`/calls/${callId}`, { method: "DELETE" });
+      setCalls((prev) => prev.filter((c) => c.id !== callId));
+
+      const updateContactFields = (c: Contact): Contact => ({
+        ...c,
+        times_called: res.times_called,
+        call_outcome: res.call_outcome,
+      });
+
+      if (isViewingHistory) {
+        setSessionHistory((prev) =>
+          prev.map((c) => (c.id === res.contact_id ? updateContactFields(c) : c))
+        );
+      } else if (contact?.id === res.contact_id) {
+        setContact((prev) => (prev ? updateContactFields(prev) : prev));
+      }
+
+      setOutcome(res.call_outcome ?? "");
+      setOutcomeSaved(false);
+      setCallbackDateSaved(false);
+      setOutcomeRequired(false);
+      if (!res.call_outcome && displayContact) {
+        setSavedContactIds((prev) => prev.filter((id) => id !== displayContact.id));
+        setCallbackDate("");
+      }
+    } catch (err) {
+      console.error("Failed to delete call log", err);
+    }
+  };
 
   const handleSendSms = async () => {
     if (!displayContact) return;
@@ -885,6 +946,65 @@ function CallTracker() {
           )}
         </div>
 
+        {/* Call Script */}
+        <div className="border border-border bg-card p-6">
+          <h2 className="text-sm font-semibold mb-3">Call Script</h2>
+          <div className="space-y-3 text-sm leading-relaxed bg-muted/40 rounded-md p-4">
+            <p>
+              &ldquo;Hi{" "}
+              <span className="font-semibold text-primary">{displayContact.first_name || "there"}</span>
+              , my name is{" "}
+              <span className="font-semibold text-primary">{user.full_name?.split(" ")[0] || "____"}</span>.
+            </p>
+            <p>
+              I&apos;ve been working with and speaking to a lot of distributors in the{" "}
+              <span className="font-semibold text-primary">
+                {displayContact.industry_tag?.toLowerCase() || "distribution"}
+              </span>{" "}
+              space and building AI software around the problems that keep coming up. I&apos;d love
+              to hear what&apos;s taking up most of your time at{" "}
+              <span className="font-semibold text-primary">{displayContact.company_name}</span>
+              {" "}&mdash; would you be open to a quick conversation sometime this week?&rdquo;
+            </p>
+            <p className="font-semibold italic">
+              &ldquo;How does Tuesday 11am work for you?&rdquo;
+            </p>
+          </div>
+
+          <Separator className="my-4" />
+
+          <div className="space-y-3">
+            <div>
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
+                Key stats to mention
+              </p>
+              <ul className="space-y-1.5 text-sm">
+                <li className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+                  3x number of RFQs that can be processed daily
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+                  Increased RFQ win rate by 15%
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+                  Cut procurement time in half + prevent 80% of stockouts
+                </li>
+              </ul>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-2">
+                Reference customers
+              </p>
+              <div className="flex gap-2">
+                <Badge variant="secondary">Nikko Electronics</Badge>
+                <Badge variant="secondary">TAG Distribution</Badge>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Call Outcome */}
         <div className="border border-border bg-card p-6">
           <h2 className="text-sm font-semibold mb-3">Call Outcome</h2>
@@ -939,7 +1059,7 @@ function CallTracker() {
               })}
             </div>
           </div>
-          {outcome === "didnt_pick_up" && !hasLoggedThisCall && (
+          {outcome === "didnt_pick_up" && (
             <div className="mt-4 flex items-center gap-3 border-t border-border pt-4">
               <CalendarDays size={14} className="text-muted-foreground shrink-0" />
               <Label htmlFor="callbackDate" className="text-sm whitespace-nowrap">Callback date</Label>
@@ -947,21 +1067,26 @@ function CallTracker() {
                 id="callbackDate"
                 type="date"
                 value={callbackDate}
-                onChange={(e) => setCallbackDate(e.target.value)}
+                onChange={(e) => {
+                  setCallbackDate(e.target.value);
+                  if (hasLoggedThisCall && displayContact) {
+                    handleUpdateCallbackDate(e.target.value);
+                  }
+                }}
                 min={new Date().toISOString().slice(0, 10)}
                 className="w-44"
               />
-              <span className="text-xs text-muted-foreground">
-                {callbackDate
-                  ? `Will re-enter your queue on ${new Date(callbackDate + "T00:00:00").toLocaleDateString()}`
-                  : `Default: ${retryDays} day${retryDays !== 1 ? "s" : ""} from today`}
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                {callbackDateSaved ? (
+                  <><CheckCircle size={12} className="text-green-600" /> Date updated</>
+                ) : callbackDate ? (
+                  hasLoggedThisCall
+                    ? `Scheduled for ${new Date(callbackDate + "T00:00:00").toLocaleDateString()}`
+                    : `Will re-enter your queue on ${new Date(callbackDate + "T00:00:00").toLocaleDateString()}`
+                ) : (
+                  `Default: ${retryDays} day${retryDays !== 1 ? "s" : ""} from today`
+                )}
               </span>
-            </div>
-          )}
-          {outcome === "didnt_pick_up" && hasLoggedThisCall && displayContact.retry_at && (
-            <div className="mt-4 flex items-center gap-2 border-t border-border pt-4 text-sm text-muted-foreground">
-              <CalendarDays size={14} />
-              Callback scheduled for {new Date(displayContact.retry_at).toLocaleDateString()}
             </div>
           )}
         </div>
@@ -1054,14 +1179,7 @@ function CallTracker() {
                       {formatOutcome(call.outcome)}
                     </Badge>
                     <button
-                      onClick={async () => {
-                        try {
-                          await apiFetch(`/calls/${call.id}`, { method: "DELETE" });
-                          setCalls((prev) => prev.filter((c) => c.id !== call.id));
-                        } catch (err) {
-                          console.error("Failed to delete call log", err);
-                        }
-                      }}
+                      onClick={() => handleDeleteCallLog(call.id)}
                       className="text-muted-foreground hover:text-destructive transition-colors"
                       title="Delete call log"
                     >
@@ -1172,7 +1290,7 @@ function CallTracker() {
               })}
             </div>
           </div>
-          {outcome === "didnt_pick_up" && !hasLoggedThisCall && (
+          {outcome === "didnt_pick_up" && (
             <div className="flex items-center gap-3 mt-2">
               <CalendarDays size={14} className="text-muted-foreground shrink-0" />
               <Label htmlFor="dialogCallbackDate" className="text-sm whitespace-nowrap">Callback date</Label>
@@ -1180,10 +1298,20 @@ function CallTracker() {
                 id="dialogCallbackDate"
                 type="date"
                 value={callbackDate}
-                onChange={(e) => setCallbackDate(e.target.value)}
+                onChange={(e) => {
+                  setCallbackDate(e.target.value);
+                  if (hasLoggedThisCall && displayContact) {
+                    handleUpdateCallbackDate(e.target.value);
+                  }
+                }}
                 min={new Date().toISOString().slice(0, 10)}
                 className="w-44"
               />
+              {callbackDateSaved && (
+                <span className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
+                  <CheckCircle size={12} /> Updated
+                </span>
+              )}
             </div>
           )}
         </DialogContent>
