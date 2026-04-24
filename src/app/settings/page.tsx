@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Lock, Mail, Unlink } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { CheckCircle, Lock, Mail, Unlink, MessageSquare, Phone, RotateCcw } from "lucide-react";
 import type { Settings } from "@/types";
 
 export default function SettingsPage() {
@@ -177,247 +178,273 @@ function SettingsContent() {
     }
   };
 
+  const templateVariables = ["<first_name>", "<last_name>", "<company_name>", "<title>", "<website>", "<your_name>", "<type>"];
+
   if (loading) {
-    return <div className="p-6 text-muted-foreground">Loading...</div>;
+    return <div className="flex items-center justify-center h-full text-muted-foreground">Loading...</div>;
   }
 
   return (
-    <div className="p-6 max-w-xl">
-      <h1 className="text-2xl font-semibold tracking-tight mb-1">Settings</h1>
-      <p className="text-sm text-muted-foreground mb-6">
-        Configure auto-SMS and messaging templates.
-      </p>
-
-      <div className="space-y-6 border border-border bg-card p-6">
-        <div className="space-y-2">
-          <Label htmlFor="threshold">Auto-SMS after N call occasions</Label>
-          <Input
-            id="threshold"
-            type="number"
-            min={1}
-            max={100}
-            value={threshold}
-            onChange={(e) => setThreshold(parseInt(e.target.value) || 1)}
-            className="w-24"
-          />
-          <p className="text-xs text-muted-foreground">
-            After this many separate-day call attempts, the platform will prompt
-            you to send an SMS.
+    <div className="flex justify-center py-10 px-6">
+      <div className="w-full max-w-2xl space-y-8">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage your calling preferences, email integration, and account.
           </p>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="retryDays">Retry &quot;didn&apos;t pick up&quot; after N days</Label>
-          <Input
-            id="retryDays"
-            type="number"
-            min={1}
-            max={90}
-            value={retryDays}
-            onChange={(e) => setRetryDays(parseInt(e.target.value) || 1)}
-            className="w-24"
-          />
-          <p className="text-xs text-muted-foreground">
-            Contacts who didn&apos;t pick up will reappear in the same caller&apos;s
-            queue after this many days.
-          </p>
-        </div>
+        {/* Calling Preferences */}
+        <section className="rounded-lg border border-border bg-card overflow-hidden">
+          <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border bg-muted/30">
+            <Phone size={15} className="text-muted-foreground" />
+            <h2 className="text-sm font-semibold">Calling Preferences</h2>
+          </div>
+          <div className="p-6 space-y-5">
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <Label htmlFor="threshold">SMS after N call occasions</Label>
+                <Input
+                  id="threshold"
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={threshold}
+                  onChange={(e) => setThreshold(parseInt(e.target.value) || 1)}
+                  className="w-24"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Prompt to send SMS after this many separate-day attempts.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="retryDays">Retry after N days</Label>
+                <Input
+                  id="retryDays"
+                  type="number"
+                  min={1}
+                  max={90}
+                  value={retryDays}
+                  onChange={(e) => setRetryDays(parseInt(e.target.value) || 1)}
+                  className="w-24"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Re-queue &quot;didn&apos;t pick up&quot; contacts after this many days.
+                </p>
+              </div>
+            </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="template">SMS Template</Label>
-          <Textarea
-            id="template"
-            value={template}
-            onChange={(e) => setTemplate(e.target.value)}
-            rows={4}
-          />
-          <p className="text-xs text-muted-foreground">
-            Available variables:{" "}
-            {["<first_name>", "<last_name>", "<company_name>", "<title>", "<website>"].map(
-              (v) => (
-                <Badge key={v} variant="outline" className="mr-1 mb-1 text-xs">
+            <Separator />
+
+            <div className="space-y-1.5">
+              <Label htmlFor="template">SMS Template</Label>
+              <Textarea
+                id="template"
+                value={template}
+                onChange={(e) => setTemplate(e.target.value)}
+                rows={3}
+              />
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {templateVariables.map((v) => (
+                  <Badge key={v} variant="outline" className="text-xs font-mono">
+                    {v}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-1">
+              <Button onClick={handleSave} size="sm">Save preferences</Button>
+              {saved && (
+                <span className="flex items-center gap-1 text-sm text-green-600 animate-in fade-in duration-200">
+                  <CheckCircle size={13} /> Saved
+                </span>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Gmail Connection */}
+        <section className="rounded-lg border border-border bg-card overflow-hidden">
+          <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border bg-muted/30">
+            <Mail size={15} className="text-muted-foreground" />
+            <h2 className="text-sm font-semibold">Gmail Connection</h2>
+          </div>
+          <div className="p-6">
+            {gmailLoading ? (
+              <p className="text-sm text-muted-foreground">Checking connection...</p>
+            ) : gmailConnected ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-2 w-2 rounded-full bg-green-500" />
+                  <span className="text-sm">
+                    Connected as <span className="font-medium">{gmailAddress}</span>
+                  </span>
+                </div>
+                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={handleDisconnectGmail}>
+                  <Unlink size={13} className="mr-1.5" /> Disconnect
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm">No Gmail account connected.</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Connect to send follow-up emails from the call tracker.</p>
+                </div>
+                <Button size="sm" onClick={handleConnectGmail}>
+                  <Mail size={13} className="mr-1.5" /> Connect Gmail
+                </Button>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Email Templates */}
+        <section className="rounded-lg border border-border bg-card overflow-hidden">
+          <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border bg-muted/30">
+            <MessageSquare size={15} className="text-muted-foreground" />
+            <h2 className="text-sm font-semibold">Email Templates</h2>
+          </div>
+          <div className="p-6 space-y-6">
+            <p className="text-xs text-muted-foreground">
+              Default templates for follow-up emails. Users can edit before sending.
+            </p>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 mb-3">
+                <RotateCcw size={13} className="text-muted-foreground" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Didn&apos;t Pick Up
+                </span>
+              </div>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="emailSubjectDPU" className="text-xs">Subject line</Label>
+                  <Input
+                    id="emailSubjectDPU"
+                    value={emailSubjectDidntPickUp}
+                    onChange={(e) => setEmailSubjectDidntPickUp(e.target.value)}
+                    placeholder="Following up"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="emailTemplateDPU" className="text-xs">Email body</Label>
+                  <Textarea
+                    id="emailTemplateDPU"
+                    value={emailTemplateDidntPickUp}
+                    onChange={(e) => setEmailTemplateDidntPickUp(e.target.value)}
+                    rows={4}
+                    placeholder="Hi <first_name>, I tried reaching you by phone..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle size={13} className="text-muted-foreground" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Interested
+                </span>
+              </div>
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <Label htmlFor="emailSubjectInt" className="text-xs">Subject line</Label>
+                  <Input
+                    id="emailSubjectInt"
+                    value={emailSubjectInterested}
+                    onChange={(e) => setEmailSubjectInterested(e.target.value)}
+                    placeholder="Great chatting with you"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="emailTemplateInt" className="text-xs">Email body</Label>
+                  <Textarea
+                    id="emailTemplateInt"
+                    value={emailTemplateInterested}
+                    onChange={(e) => setEmailTemplateInterested(e.target.value)}
+                    rows={4}
+                    placeholder="Hi <first_name>, great speaking with you today..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div className="flex flex-wrap gap-1">
+              <span className="text-xs text-muted-foreground mr-1.5 self-center">Variables:</span>
+              {templateVariables.map((v) => (
+                <Badge key={v} variant="outline" className="text-xs font-mono">
                   {v}
                 </Badge>
-              )
-            )}
-          </p>
-        </div>
+              ))}
+            </div>
 
-        <div className="flex items-center gap-3">
-          <Button onClick={handleSave}>Save settings</Button>
-          {saved && (
-            <span className="flex items-center gap-1 text-sm text-green-600">
-              <CheckCircle size={14} /> Saved
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Gmail Connection */}
-      <div className="mt-8 space-y-6 border border-border bg-card p-6">
-        <div className="flex items-center gap-2">
-          <Mail size={16} className="text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Gmail Connection</h2>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Connect your Gmail account to send follow-up emails directly from the platform.
-        </p>
-        {gmailLoading ? (
-          <p className="text-sm text-muted-foreground">Checking connection...</p>
-        ) : gmailConnected ? (
-          <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5 text-sm text-green-600">
-              <CheckCircle size={14} /> Connected as {gmailAddress}
-            </span>
-            <Button variant="outline" size="sm" onClick={handleDisconnectGmail}>
-              <Unlink size={12} className="mr-1" /> Disconnect
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button onClick={handleSaveEmailTemplates} size="sm">Save templates</Button>
+              {emailSaved && (
+                <span className="flex items-center gap-1 text-sm text-green-600 animate-in fade-in duration-200">
+                  <CheckCircle size={13} /> Saved
+                </span>
+              )}
+            </div>
           </div>
-        ) : (
-          <Button onClick={handleConnectGmail}>
-            <Mail size={14} className="mr-2" /> Connect Gmail
-          </Button>
-        )}
-      </div>
+        </section>
 
-      {/* Email Templates */}
-      <div className="mt-8 space-y-6 border border-border bg-card p-6">
-        <div className="flex items-center gap-2">
-          <Mail size={16} className="text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Email Templates</h2>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Default email templates for follow-ups. Users can edit these before sending.
-        </p>
-
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Didn&apos;t Pick Up
-            </Label>
-            <div className="space-y-2">
-              <div>
-                <Label htmlFor="emailSubjectDPU">Subject</Label>
+        {/* Account Security */}
+        <section className="rounded-lg border border-border bg-card overflow-hidden">
+          <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border bg-muted/30">
+            <Lock size={15} className="text-muted-foreground" />
+            <h2 className="text-sm font-semibold">Change Password</h2>
+          </div>
+          <div className="p-6 space-y-4">
+            <div className="grid grid-cols-1 gap-4 max-w-sm">
+              <div className="space-y-1">
+                <Label htmlFor="current-password" className="text-xs">Current Password</Label>
                 <Input
-                  id="emailSubjectDPU"
-                  value={emailSubjectDidntPickUp}
-                  onChange={(e) => setEmailSubjectDidntPickUp(e.target.value)}
-                  placeholder="Following up"
+                  id="current-password"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
                 />
               </div>
-              <div>
-                <Label htmlFor="emailTemplateDPU">Body</Label>
-                <Textarea
-                  id="emailTemplateDPU"
-                  value={emailTemplateDidntPickUp}
-                  onChange={(e) => setEmailTemplateDidntPickUp(e.target.value)}
-                  rows={5}
-                  placeholder="Hi <first_name>, I tried reaching you by phone..."
+              <div className="space-y-1">
+                <Label htmlFor="new-password" className="text-xs">New Password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="confirm-password" className="text-xs">Confirm New Password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                 />
               </div>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Interested
-            </Label>
-            <div className="space-y-2">
-              <div>
-                <Label htmlFor="emailSubjectInt">Subject</Label>
-                <Input
-                  id="emailSubjectInt"
-                  value={emailSubjectInterested}
-                  onChange={(e) => setEmailSubjectInterested(e.target.value)}
-                  placeholder="Great chatting with you"
-                />
-              </div>
-              <div>
-                <Label htmlFor="emailTemplateInt">Body</Label>
-                <Textarea
-                  id="emailTemplateInt"
-                  value={emailTemplateInterested}
-                  onChange={(e) => setEmailTemplateInterested(e.target.value)}
-                  rows={5}
-                  placeholder="Hi <first_name>, great speaking with you today..."
-                />
-              </div>
+            {passwordError && (
+              <p className="text-sm text-destructive">{passwordError}</p>
+            )}
+
+            <div className="flex items-center gap-3 pt-1">
+              <Button onClick={handleChangePassword} size="sm">Update Password</Button>
+              {passwordSaved && (
+                <span className="flex items-center gap-1 text-sm text-green-600 animate-in fade-in duration-200">
+                  <CheckCircle size={13} /> Password updated
+                </span>
+              )}
             </div>
           </div>
-
-          <p className="text-xs text-muted-foreground">
-            Available variables:{" "}
-            {["<first_name>", "<last_name>", "<company_name>", "<title>", "<website>"].map(
-              (v) => (
-                <Badge key={v} variant="outline" className="mr-1 mb-1 text-xs">
-                  {v}
-                </Badge>
-              )
-            )}
-          </p>
-
-          <div className="flex items-center gap-3">
-            <Button onClick={handleSaveEmailTemplates}>Save email templates</Button>
-            {emailSaved && (
-              <span className="flex items-center gap-1 text-sm text-green-600">
-                <CheckCircle size={14} /> Saved
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-8 space-y-6 border border-border bg-card p-6">
-        <div className="flex items-center gap-2">
-          <Lock size={16} className="text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Change Password</h2>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="current-password">Current Password</Label>
-          <Input
-            id="current-password"
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            className="max-w-xs"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="new-password">New Password</Label>
-          <Input
-            id="new-password"
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            className="max-w-xs"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="confirm-password">Confirm New Password</Label>
-          <Input
-            id="confirm-password"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            className="max-w-xs"
-          />
-        </div>
-
-        {passwordError && (
-          <p className="text-sm text-destructive">{passwordError}</p>
-        )}
-
-        <div className="flex items-center gap-3">
-          <Button onClick={handleChangePassword}>Update Password</Button>
-          {passwordSaved && (
-            <span className="flex items-center gap-1 text-sm text-green-600">
-              <CheckCircle size={14} /> Password updated
-            </span>
-          )}
-        </div>
+        </section>
       </div>
     </div>
   );

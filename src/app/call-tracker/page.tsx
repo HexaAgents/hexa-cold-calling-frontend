@@ -59,6 +59,7 @@ import {
   Mail,
 } from "lucide-react";
 import type { Contact, Note, CallLog, CallLogResponse, CallLogDeleteResponse, EmailLog, Settings, User } from "@/types";
+import { todayLocalISO, formatLocalDate } from "@/lib/utils";
 import Link from "next/link";
 import { Device, Call } from "@twilio/voice-sdk";
 
@@ -194,7 +195,7 @@ function CallTracker({ user }: { user: User }) {
   const computeDefaultCallbackDate = useCallback((days: number) => {
     const d = new Date();
     d.setDate(d.getDate() + days);
-    return d.toISOString().slice(0, 10);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }, []);
 
   const claimNext = useCallback(async () => {
@@ -878,7 +879,7 @@ function CallTracker({ user }: { user: User }) {
               {displayContact.retry_at && (
                 <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <CalendarDays size={10} />
-                  Scheduled: {new Date(displayContact.retry_at).toLocaleDateString()}
+                  Scheduled: {formatLocalDate(displayContact.retry_at)}
                 </span>
               )}
             </div>
@@ -1190,7 +1191,7 @@ function CallTracker({ user }: { user: User }) {
                     handleUpdateCallbackDate(e.target.value);
                   }
                 }}
-                min={new Date().toISOString().slice(0, 10)}
+                min={todayLocalISO()}
                 className="w-44"
               />
               <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -1198,8 +1199,8 @@ function CallTracker({ user }: { user: User }) {
                   <><CheckCircle size={12} className="text-green-600" /> Date updated</>
                 ) : callbackDate ? (
                   hasLoggedThisCall
-                    ? `Scheduled for ${new Date(callbackDate + "T00:00:00").toLocaleDateString()}`
-                    : `Will re-enter your queue on ${new Date(callbackDate + "T00:00:00").toLocaleDateString()}`
+                    ? `Scheduled for ${formatLocalDate(callbackDate)}`
+                    : `Will re-enter your queue on ${formatLocalDate(callbackDate)}`
                 ) : (
                   `Default: ${retryDays} day${retryDays !== 1 ? "s" : ""} from today`
                 )}
@@ -1502,7 +1503,7 @@ function CallTracker({ user }: { user: User }) {
                     handleUpdateCallbackDate(e.target.value);
                   }
                 }}
-                min={new Date().toISOString().slice(0, 10)}
+                min={todayLocalISO()}
                 className="w-44"
               />
               {callbackDateSaved && (
