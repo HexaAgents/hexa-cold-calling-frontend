@@ -336,6 +336,17 @@ function CallTracker() {
     }
 
     await saveOutcome();
+
+    if (outcome === "not_interested") {
+      const contactId = displayContact.id;
+      try {
+        await apiFetch(`/contacts/${contactId}`, { method: "DELETE" });
+      } catch (err) {
+        console.error("Failed to delete not-interested contact", err);
+      }
+      setSessionHistory((prev) => prev.filter((c) => c.id !== contactId));
+      await claimNext();
+    }
   };
 
   const saveOutcome = async () => {
