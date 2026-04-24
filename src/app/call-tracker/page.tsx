@@ -91,6 +91,7 @@ function CallTracker() {
   const [outcome, setOutcome] = usePersistedState<string>("callTracker:outcome", "");
   const [outcomeRequired, setOutcomeRequired] = usePersistedState<boolean>("callTracker:outcomeRequired", false);
   const [outcomeSaved, setOutcomeSaved] = usePersistedState<boolean>("callTracker:outcomeSaved", false);
+  const [callLoggedThisSession, setCallLoggedThisSession] = usePersistedState<boolean>("callTracker:callLoggedThisSession", false);
   const [started, setStarted] = usePersistedState<boolean>("callTracker:started", false);
   const [filterCities, setFilterCities] = usePersistedState<string[]>("callTracker:filterCities", []);
   const [filterStates, setFilterStates] = usePersistedState<string[]>("callTracker:filterStates", []);
@@ -161,6 +162,7 @@ function CallTracker() {
     setLoading(true);
     setOutcome("");
     setOutcomeSaved(false);
+    setCallLoggedThisSession(false);
     setOutcomeRequired(false);
     setCalls([]);
     setNotes([]);
@@ -209,6 +211,7 @@ function CallTracker() {
     if (idChanged) {
       setOutcome(displayContact.call_outcome || "");
       setOutcomeSaved(false);
+      setCallLoggedThisSession(false);
       setOutcomeRequired(false);
       setNewNote("");
       setEditingNote(null);
@@ -355,6 +358,7 @@ function CallTracker() {
       setOutcomeRequired(false);
       setOutcomeDialogOpen(false);
       setOutcomeSaved(true);
+      setCallLoggedThisSession(true);
       setTimeout(() => setOutcomeSaved(false), 3000);
 
       const retryAt = result.retry_at ?? null;
@@ -406,7 +410,7 @@ function CallTracker() {
 
   const hasLoggedThisCall = isViewingHistory
     ? outcomeSaved
-    : outcomeSaved || (!outcomeRequired && calls.length > 0 && outcome !== "");
+    : outcomeSaved || callLoggedThisSession;
 
   const handleSendSms = async () => {
     if (!displayContact) return;
