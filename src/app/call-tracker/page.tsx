@@ -142,6 +142,32 @@ function CallTracker({ user }: { user: User }) {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (sessionHistory.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const checks = await Promise.all(
+        sessionHistory.map((c) =>
+          apiFetch<Contact>(`/contacts/${c.id}`).then(() => true).catch(() => false)
+        )
+      );
+      if (cancelled) return;
+      const valid = sessionHistory.filter((_, i) => checks[i]);
+      if (valid.length < sessionHistory.length) {
+        setSessionHistory(valid);
+        if (historyIndex !== null) {
+          const oldTarget = sessionHistory[sessionHistory.length - 1 - historyIndex];
+          const newIdx = oldTarget
+            ? valid.length - 1 - valid.findIndex((c) => c.id === oldTarget.id)
+            : null;
+          setHistoryIndex(newIdx !== null && newIdx >= 0 && newIdx < valid.length ? newIdx : null);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const buildFilterQuery = useCallback(() => {
     const params = new URLSearchParams();
     filterCities.forEach((v) => params.append("cities", v));
