@@ -17,7 +17,7 @@ const MAIN_VARIABLES = ["<first_name>", "<company_name>", "<your_name>", "<type>
 const ADVANCED_VARIABLES = ["<last_name>", "<title>", "<website>"];
 const ALL_VARIABLES = [...MAIN_VARIABLES, ...ADVANCED_VARIABLES];
 
-function insertAtCursor(ref: RefObject<HTMLTextAreaElement | null>, value: string, setter: (v: string) => void) {
+function insertAtCursor(ref: RefObject<HTMLTextAreaElement | HTMLInputElement | null>, value: string, setter: (v: string) => void) {
   const el = ref.current;
   if (!el) return;
   const start = el.selectionStart ?? el.value.length;
@@ -37,7 +37,7 @@ function VariableButtons({
   textareaRef,
   setter,
 }: {
-  textareaRef: RefObject<HTMLTextAreaElement | null>;
+  textareaRef: RefObject<HTMLTextAreaElement | HTMLInputElement | null>;
   setter: (v: string) => void;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -202,7 +202,9 @@ function SettingsContent() {
   };
 
   const smsTemplateRef = useRef<HTMLTextAreaElement>(null);
+  const emailSubjectDPURef = useRef<HTMLInputElement>(null);
   const emailBodyDPURef = useRef<HTMLTextAreaElement>(null);
+  const emailSubjectIntRef = useRef<HTMLInputElement>(null);
   const emailBodyIntRef = useRef<HTMLTextAreaElement>(null);
 
   const handleChangePassword = async () => {
@@ -392,10 +394,12 @@ function SettingsContent() {
                   <Label htmlFor="emailSubjectDPU" className="text-xs">Subject line</Label>
                   <Input
                     id="emailSubjectDPU"
+                    ref={emailSubjectDPURef}
                     value={emailSubjectDidntPickUp}
                     onChange={(e) => setEmailSubjectDidntPickUp(e.target.value)}
                     placeholder="Following up"
                   />
+                  <VariableButtons textareaRef={emailSubjectDPURef} setter={setEmailSubjectDidntPickUp} />
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="emailTemplateDPU" className="text-xs">Email body</Label>
@@ -426,10 +430,12 @@ function SettingsContent() {
                   <Label htmlFor="emailSubjectInt" className="text-xs">Subject line</Label>
                   <Input
                     id="emailSubjectInt"
+                    ref={emailSubjectIntRef}
                     value={emailSubjectInterested}
                     onChange={(e) => setEmailSubjectInterested(e.target.value)}
                     placeholder="Great chatting with you"
                   />
+                  <VariableButtons textareaRef={emailSubjectIntRef} setter={setEmailSubjectInterested} />
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="emailTemplateInt" className="text-xs">Email body</Label>

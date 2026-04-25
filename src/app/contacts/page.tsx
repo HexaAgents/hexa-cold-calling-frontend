@@ -5,9 +5,16 @@ import { useRouter } from "next/navigation";
 import AuthGuard from "@/components/layout/auth-guard";
 import AppSidebar from "@/components/layout/app-sidebar";
 import { apiFetch } from "@/lib/api";
-import { formatLocalDate } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
@@ -19,14 +26,7 @@ import { Input } from "@/components/ui/input";
 import {
   ArrowUpDown,
   Search,
-  MapPin,
-  Phone,
-  Mail,
-  Globe,
-  Building2,
   Users,
-  CalendarDays,
-  ExternalLink,
   Loader2,
 } from "lucide-react";
 import type { Contact, ContactListResponse } from "@/types";
@@ -175,21 +175,8 @@ function ContactsContent() {
     return "outline";
   };
 
-  const phoneDisplay = (c: Contact) => {
-    return c.mobile_phone || c.work_direct_phone || c.corporate_phone || null;
-  };
-
-  const locationDisplay = (c: Contact) => {
-    return [c.city, c.state, c.country].filter(Boolean).join(", ") || null;
-  };
-
-  const enrichmentLabel = (status: string | null) => {
-    if (status === "pending_enrichment") return "Pending enrichment";
-    if (status === "enriching") return "Enriching...";
-    if (status === "enriched") return "Enriched";
-    if (status === "no_mobile_found") return "No mobile found";
-    return null;
-  };
+  const phoneDisplay = (c: Contact) =>
+    c.mobile_phone || c.work_direct_phone || c.corporate_phone || null;
 
   return (
     <div className="p-6">
@@ -227,22 +214,6 @@ function ContactsContent() {
               <SelectItem value="interested">Interested</SelectItem>
             </SelectContent>
           </Select>
-          <div className="flex border border-border rounded-md overflow-hidden ml-auto">
-            {(["score", "times_called", "created_at"] as const).map((col) => (
-              <button
-                key={col}
-                onClick={() => toggleSort(col)}
-                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${
-                  sortBy === col
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-card hover:bg-muted text-muted-foreground"
-                }`}
-              >
-                {col === "score" ? "Score" : col === "times_called" ? "Calls" : "Date"}
-                {sortBy === col && <ArrowUpDown size={10} />}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -270,158 +241,99 @@ function ContactsContent() {
         </div>
       )}
 
-      {/* Card grid */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20 text-muted-foreground">
-          <Loader2 size={20} className="mr-2 animate-spin" /> Loading contacts...
-        </div>
-      ) : contacts.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
-            <Users size={20} className="text-muted-foreground" />
-          </div>
-          <p className="text-sm font-medium">No contacts found</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {debouncedSearch ? "Try a different search term." : "Import a CSV to get started."}
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {contacts.map((c) => {
-            const location = locationDisplay(c);
-            const phone = phoneDisplay(c);
-            const enrichLabel = enrichmentLabel(c.enrichment_status);
-            return (
-              <div
-                key={c.id}
-                onClick={() => router.push(`/contacts/${c.id}`)}
-                className="group rounded-lg border border-border bg-card p-5 cursor-pointer transition-all hover:border-primary/40 hover:shadow-sm"
-              >
-                {/* Top row: name + score */}
-                <div className="flex items-start justify-between gap-3 mb-2">
-                  <div className="min-w-0">
-                    <h3 className="font-semibold truncate group-hover:text-primary transition-colors">
-                      {c.first_name} {c.last_name}
-                    </h3>
-                    {(c.title || c.company_name) && (
-                      <div className="flex flex-wrap gap-1.5 mt-1.5">
-                        {c.title && (
-                          <Badge variant="secondary" className="text-[10px] h-5 font-normal">
-                            {c.title}
-                          </Badge>
-                        )}
-                        <Badge variant="outline" className="text-[10px] h-5 font-normal gap-1">
-                          <Building2 size={9} />
-                          {c.company_name}
-                        </Badge>
-                      </div>
-                    )}
+      {/* Table */}
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/30">
+              <TableHead className="font-semibold">
+                <button onClick={() => toggleSort("created_at")} className="flex items-center gap-1">
+                  Name {sortBy === "created_at" && <ArrowUpDown size={11} />}
+                </button>
+              </TableHead>
+              <TableHead className="font-semibold">Company</TableHead>
+              <TableHead className="font-semibold">Title</TableHead>
+              <TableHead className="font-semibold">Phone</TableHead>
+              <TableHead className="font-semibold">
+                <button onClick={() => toggleSort("call_outcome")} className="flex items-center gap-1">
+                  Status {sortBy === "call_outcome" && <ArrowUpDown size={11} />}
+                </button>
+              </TableHead>
+              <TableHead className="font-semibold text-right">
+                <button onClick={() => toggleSort("score")} className="flex items-center gap-1 ml-auto">
+                  Score {sortBy === "score" && <ArrowUpDown size={11} />}
+                </button>
+              </TableHead>
+              <TableHead className="font-semibold text-center">
+                <button onClick={() => toggleSort("times_called")} className="flex items-center gap-1 justify-center">
+                  Calls {sortBy === "times_called" && <ArrowUpDown size={11} />}
+                </button>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-16">
+                  <div className="flex items-center justify-center text-muted-foreground">
+                    <Loader2 size={18} className="mr-2 animate-spin" /> Loading contacts...
                   </div>
-                  <div className="flex flex-col items-end shrink-0">
-                    <span className="text-lg font-mono font-bold leading-none">
-                      {c.score ?? "—"}
-                    </span>
-                    {c.company_type && c.company_type !== "rejected" && (
-                      <span className="text-[10px] text-muted-foreground mt-0.5">
-                        {c.company_type}
-                      </span>
-                    )}
+                </TableCell>
+              </TableRow>
+            ) : contacts.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-16">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                      <Users size={16} className="text-muted-foreground" />
+                    </div>
+                    <p className="text-sm font-medium">No contacts found</p>
+                    <p className="text-xs text-muted-foreground">
+                      {debouncedSearch ? "Try a different search term." : "Import a CSV to get started."}
+                    </p>
                   </div>
-                </div>
-
-                {/* Info grid */}
-                <div className="space-y-1.5 text-xs text-muted-foreground">
-                  {c.industry_tag && (
-                    <div className="flex items-center gap-1.5">
-                      <Users size={11} className="shrink-0" />
-                      <span className="truncate">{c.industry_tag}</span>
-                      {c.employees && (
-                        <span className="ml-auto shrink-0 tabular-nums">{c.employees} emp</span>
-                      )}
-                    </div>
-                  )}
-                  {!c.industry_tag && c.employees && (
-                    <div className="flex items-center gap-1.5">
-                      <Users size={11} className="shrink-0" />
-                      <span>{c.employees} employees</span>
-                    </div>
-                  )}
-                  {location && (
-                    <div className="flex items-center gap-1.5">
-                      <MapPin size={11} className="shrink-0" />
-                      <span className="truncate">{location}</span>
-                    </div>
-                  )}
-                  {phone && (
-                    <div className="flex items-center gap-1.5">
-                      <Phone size={11} className="shrink-0" />
-                      <span className="font-mono">{phone}</span>
-                    </div>
-                  )}
-                  {c.email && (
-                    <div className="flex items-center gap-1.5">
-                      <Mail size={11} className="shrink-0" />
-                      <span className="truncate">{c.email}</span>
-                    </div>
-                  )}
-                  {c.website && (
-                    <div className="flex items-center gap-1.5">
-                      <Globe size={11} className="shrink-0" />
-                      <span className="truncate">
-                        {c.website.replace(/^https?:\/\/(www\.)?/, "").slice(0, 35)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Footer: badges */}
-                <div className="flex items-center flex-wrap gap-1.5 mt-3 pt-3 border-t border-border">
-                  <Badge variant={statusVariant(c)} className="text-[10px] h-5">
-                    {displayStatus(c)}
-                  </Badge>
-                  {c.times_called > 0 && (
-                    <Badge variant="outline" className="text-[10px] h-5 tabular-nums">
-                      {c.times_called} call{c.times_called !== 1 ? "s" : ""}
+                </TableCell>
+              </TableRow>
+            ) : (
+              contacts.map((c) => (
+                <TableRow
+                  key={c.id}
+                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => router.push(`/contacts/${c.id}`)}
+                >
+                  <TableCell className="font-medium">
+                    {c.first_name} {c.last_name}
+                  </TableCell>
+                  <TableCell className="text-sm">
+                    {c.company_name}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {c.title || "—"}
+                  </TableCell>
+                  <TableCell className="text-sm font-mono text-muted-foreground">
+                    {phoneDisplay(c) || "—"}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={statusVariant(c)} className="text-[10px] h-5">
+                      {displayStatus(c)}
                     </Badge>
-                  )}
-                  {c.sms_sent && (
-                    <Badge variant="outline" className="text-[10px] h-5">
-                      SMS sent
-                    </Badge>
-                  )}
-                  {c.retry_at && (
-                    <Badge variant="outline" className="text-[10px] h-5 gap-0.5">
-                      <CalendarDays size={9} />
-                      {formatLocalDate(c.retry_at, { month: "short", day: "numeric" })}
-                    </Badge>
-                  )}
-                  {enrichLabel && c.enrichment_status !== "enriched" && (
-                    <Badge variant="secondary" className="text-[10px] h-5">
-                      {enrichLabel}
-                    </Badge>
-                  )}
-                  {c.person_linkedin_url && (
-                    <a
-                      href={c.person_linkedin_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="ml-auto text-muted-foreground hover:text-primary transition-colors"
-                      title="LinkedIn profile"
-                    >
-                      <ExternalLink size={12} />
-                    </a>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className="font-mono text-sm">{c.score ?? "—"}</span>
+                  </TableCell>
+                  <TableCell className="text-center tabular-nums text-sm">
+                    {c.times_called ?? 0}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
 
       {/* Pagination */}
       {total > 50 && (
-        <div className="mt-6 flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3">
+        <div className="mt-4 flex items-center justify-between">
           <p className="text-sm text-muted-foreground tabular-nums">
             Page {page} of {Math.ceil(total / 50)}
           </p>

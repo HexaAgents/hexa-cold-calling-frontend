@@ -45,7 +45,7 @@ export interface ContactListResponse {
 
 export interface CallLog {
   id: string;
-  contact_id: string;
+  contact_id: string | null;
   user_id: string;
   call_date: string;
   call_method: string;
