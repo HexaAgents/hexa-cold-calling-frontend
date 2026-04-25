@@ -243,7 +243,7 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
             : `${batch.stored_rows} stored · ${batch.discarded_rows} discarded${enriched > 0 ? ` · ${enriched} enriching` : ""}`}
         </p>
         <span className="text-[10px] text-muted-foreground/60">
-          {new Date(batch.created_at).toLocaleDateString(undefined, {
+          {new Date(batch.created_at ?? "").toLocaleDateString(undefined, {
             month: "short",
             day: "numeric",
             hour: "numeric",
