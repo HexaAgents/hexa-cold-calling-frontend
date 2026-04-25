@@ -154,3 +154,27 @@ export interface ProductivityResponse {
   overall_breakdown: OutcomeBreakdown;
   per_user_breakdown: UserOutcomeBreakdown[];
 }
+
+export interface TrackedContact {
+  contact_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  company_name: string;
+  email: string;
+  sent_count: number;
+  received_count: number;
+  last_sent_at: string | null;
+  last_received_at: string | null;
+  reply_status: "replied" | "awaiting_reply" | "no_emails";
+}
+
+export interface TrackedEmail {
+  id: string;
+  gmail_message_id: string;
+  from_address: string;
+  to_address: string;
+  subject: string;
+  snippet: string;
+  direction: "sent" | "received";
+  message_date: string;
+}
