@@ -137,6 +137,8 @@ function CallTracker({ user }: { user: User }) {
   const [gmailConnected, setGmailConnected] = useState(false);
 
   const [outsideBusinessHours, setOutsideBusinessHours] = useState(false);
+  const [claimedAt, setClaimedAt] = useState<number | null>(null);
+  const [claimExpired, setClaimExpired] = useState(false);
 
   const viewingHistoryContact =
     historyIndex !== null ? sessionHistory[sessionHistory.length - 1 - historyIndex] ?? null : null;
@@ -211,6 +213,8 @@ function CallTracker({ user }: { user: User }) {
     setNotes([]);
     setLastDialedPhone(null);
     setCallbackDate("");
+    setClaimExpired(false);
+    setClaimedAt(null);
     if (contact) {
       setSessionHistory((prev) => {
         if (prev.some((c) => c.id === contact.id)) return prev;
@@ -221,6 +225,7 @@ function CallTracker({ user }: { user: User }) {
       const next = await apiFetch<Contact | null>(`/calls/next${buildFilterQuery()}`, { method: "POST" });
       if (next && next.id) {
         setContact(next);
+        setClaimedAt(Date.now());
         setQueueEmpty(false);
       } else {
         setContact(null);
@@ -534,6 +539,20 @@ function CallTracker({ user }: { user: User }) {
     : false;
 
   const isDisabledByHours = outsideBusinessHours && !displayContact?.call_outcome && !hasLoggedThisCall;
+
+  const CLAIM_TIMEOUT_MS = 60 * 60 * 1000;
+  useEffect(() => {
+    if (!claimedAt || isViewingHistory || hasLoggedThisCall || !contact) return;
+    const check = () => {
+      if (Date.now() - claimedAt >= CLAIM_TIMEOUT_MS) {
+        setClaimExpired(true);
+        apiFetch(`/calls/release/${contact.id}`, { method: "POST" }).catch(() => {});
+      }
+    };
+    check();
+    const interval = setInterval(check, 60_000);
+    return () => clearInterval(interval);
+  }, [claimedAt, isViewingHistory, hasLoggedThisCall, contact]);
 
   const handleDeleteCallLog = async (callId: string) => {
     try {
@@ -890,7 +909,22 @@ function CallTracker({ user }: { user: User }) {
         )}
       </div>
 
-      {isDisabledByHours && (
+      {claimExpired && (
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-destructive/50 bg-destructive/5 p-4">
+          <Clock size={16} className="text-destructive shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-destructive">Time expired</p>
+            <p className="text-xs text-destructive/80">
+              You took too long without logging an outcome. This contact has been released back to the pool.
+            </p>
+          </div>
+          <Button size="sm" className="ml-auto shrink-0" onClick={() => { setClaimExpired(false); claimNext(); }}>
+            Next contact <ChevronRight size={14} className="ml-1" />
+          </Button>
+        </div>
+      )}
+
+      {!claimExpired && isDisabledByHours && (
         <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4">
           <Clock size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
           <div>
@@ -905,7 +939,7 @@ function CallTracker({ user }: { user: User }) {
         </div>
       )}
 
-      <div className={`space-y-6 ${isDisabledByHours ? "opacity-50 pointer-events-none select-none" : ""}`}>
+      <div className={`space-y-6 ${claimExpired || isDisabledByHours ? "opacity-50 pointer-events-none select-none" : ""}`}>
         {/* Contact Card */}
         <div className="border border-border bg-card p-6">
           {displayContact.times_called > 0 && (

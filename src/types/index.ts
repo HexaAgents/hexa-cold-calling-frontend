@@ -133,7 +133,24 @@ export interface ProductivityRow {
   counts: Record<string, number>;
 }
 
+export interface OutcomeBreakdown {
+  total: number;
+  didnt_pick_up: number;
+  interested: number;
+  not_interested: number;
+  bad_number: number;
+  other: number;
+}
+
+export interface UserOutcomeBreakdown {
+  user_id: string;
+  first_name: string;
+  breakdown: OutcomeBreakdown;
+}
+
 export interface ProductivityResponse {
   users: ProductivityUser[];
   rows: ProductivityRow[];
+  overall_breakdown: OutcomeBreakdown;
+  per_user_breakdown: UserOutcomeBreakdown[];
 }

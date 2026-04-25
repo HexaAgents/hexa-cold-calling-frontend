@@ -194,28 +194,30 @@ function ContactsContent() {
   return (
     <div className="p-6">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {total} contact{total !== 1 ? "s" : ""}{debouncedSearch ? " matching" : " imported"}
-          </p>
+      <div className="mb-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {total} contact{total !== 1 ? "s" : ""}{debouncedSearch ? " matching" : " imported"}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[200px] max-w-[300px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search by name or phone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-[260px] pl-9 h-9 text-sm"
+              className="pl-9 h-9 text-sm"
             />
           </div>
           <Select
             value={outcomeFilter || "all"}
             onValueChange={(v) => setOutcomeFilter(v === "all" ? "" : v)}
           >
-            <SelectTrigger className="w-[180px] h-9">
+            <SelectTrigger className="w-[170px] h-9">
               <SelectValue placeholder="Filter by status" />
             </SelectTrigger>
             <SelectContent>
@@ -225,12 +227,12 @@ function ContactsContent() {
               <SelectItem value="interested">Interested</SelectItem>
             </SelectContent>
           </Select>
-          <div className="flex border border-border rounded-md overflow-hidden">
+          <div className="flex border border-border rounded-md overflow-hidden ml-auto">
             {(["score", "times_called", "created_at"] as const).map((col) => (
               <button
                 key={col}
                 onClick={() => toggleSort(col)}
-                className={`flex items-center gap-1 px-3 py-1.5 text-xs transition-colors ${
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${
                   sortBy === col
                     ? "bg-primary text-primary-foreground"
                     : "bg-card hover:bg-muted text-muted-foreground"
@@ -274,8 +276,14 @@ function ContactsContent() {
           <Loader2 size={20} className="mr-2 animate-spin" /> Loading contacts...
         </div>
       ) : contacts.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-          <p>No contacts yet. Import a CSV to get started.</p>
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
+            <Users size={20} className="text-muted-foreground" />
+          </div>
+          <p className="text-sm font-medium">No contacts found</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {debouncedSearch ? "Try a different search term." : "Import a CSV to get started."}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -413,8 +421,8 @@ function ContactsContent() {
 
       {/* Pagination */}
       {total > 50 && (
-        <div className="mt-6 flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
+        <div className="mt-6 flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3">
+          <p className="text-sm text-muted-foreground tabular-nums">
             Page {page} of {Math.ceil(total / 50)}
           </p>
           <div className="flex gap-2">
