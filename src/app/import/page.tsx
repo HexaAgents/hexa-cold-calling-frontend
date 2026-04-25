@@ -5,7 +5,7 @@ import AuthGuard from "@/components/layout/auth-guard";
 import AppSidebar from "@/components/layout/app-sidebar";
 import { apiUpload, apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Upload, FileText, AlertCircle, CreditCard, RefreshCw, CheckCircle2 } from "lucide-react";
+import { Upload, FileText, AlertCircle, CreditCard, RefreshCw, CheckCircle2, Loader2 } from "lucide-react";
 import type { ImportBatch } from "@/types";
 
 type EnrichmentHealth = {
@@ -178,42 +178,83 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
   const total = batch.total_rows || 1;
   const decided = batch.stored_rows + batch.discarded_rows;
   const pct = Math.round((decided / total) * 100);
+  const displayPct = batch.status === "completed" ? 100 : pct;
   const isComplete = batch.status === "completed";
   const isFailed = batch.status === "failed";
+  const isProcessing = batch.status === "processing";
   const enriched = batch.enriched_rows ?? 0;
 
+  const fillClass = isFailed
+    ? "progress-fill-destructive"
+    : isComplete
+    ? "progress-fill-complete"
+    : "progress-fill";
+
   return (
-    <div className="border border-border bg-card p-4">
-      <div className="flex items-center justify-between mb-2">
+    <div className="border border-border bg-card p-4 transition-all duration-300 hover:border-primary/30">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <FileText size={14} className="text-muted-foreground" />
           <span className="text-sm font-medium">{batch.filename}</span>
+          {isProcessing && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5">
+              <Loader2 size={10} className="animate-spin" />
+              Processing
+            </span>
+          )}
+          {isComplete && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5">
+              <CheckCircle2 size={10} />
+              Complete
+            </span>
+          )}
+          {isFailed && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-destructive bg-destructive/10 px-1.5 py-0.5">
+              <AlertCircle size={10} />
+              Failed
+            </span>
+          )}
         </div>
-        <span className="text-xs text-muted-foreground font-mono">
-          {decided} / {batch.total_rows}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground font-mono tabular-nums">
+            {decided} / {batch.total_rows}
+          </span>
+          <span className="text-xs font-semibold font-mono tabular-nums text-foreground/70">
+            {displayPct}%
+          </span>
+        </div>
       </div>
 
-      <div className="h-2 w-full bg-muted overflow-hidden">
+      <div className="progress-track h-3.5 w-full overflow-hidden">
         <div
-          className={`h-full transition-all duration-500 ${
-            isFailed ? "bg-destructive" : "bg-primary"
+          className={`h-full transition-all duration-700 ease-out ${fillClass} ${
+            isProcessing ? "progress-shimmer progress-processing" : ""
           }`}
-          style={{ width: `${isComplete ? 100 : pct}%` }}
+          style={{ width: `${displayPct}%` }}
         />
       </div>
 
-      <p className="text-xs text-muted-foreground mt-2">
-        {isFailed
-          ? `Failed — ${batch.stored_rows} stored, ${batch.discarded_rows} discarded before error`
-          : isComplete
-          ? `Complete — ${batch.stored_rows} stored, ${batch.discarded_rows} discarded${enriched > 0 ? `, ${enriched} enriched` : ""}`
-          : `${batch.stored_rows} stored · ${batch.discarded_rows} discarded${enriched > 0 ? ` · ${enriched} enriching` : ""}`}
-      </p>
+      <div className="flex items-center justify-between mt-2.5">
+        <p className="text-xs text-muted-foreground">
+          {isFailed
+            ? `${batch.stored_rows} stored, ${batch.discarded_rows} discarded before error`
+            : isComplete
+            ? `${batch.stored_rows} stored, ${batch.discarded_rows} discarded${enriched > 0 ? `, ${enriched} enriched` : ""}`
+            : `${batch.stored_rows} stored · ${batch.discarded_rows} discarded${enriched > 0 ? ` · ${enriched} enriching` : ""}`}
+        </p>
+        <span className="text-[10px] text-muted-foreground/60">
+          {new Date(batch.created_at).toLocaleDateString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </span>
+      </div>
 
       {batch.enrichment_error && (
-        <div className="mt-2 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-2">
-          <AlertCircle size={12} />
+        <div className="mt-2.5 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-2">
+          <AlertCircle size={12} className="shrink-0" />
           <span>{batch.enrichment_error} — contacts saved as pending. Add credits and re-import to retry.</span>
         </div>
       )}

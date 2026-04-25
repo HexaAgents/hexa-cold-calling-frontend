@@ -252,7 +252,6 @@ function ContactsContent() {
                 </button>
               </TableHead>
               <TableHead className="font-semibold">Company</TableHead>
-              <TableHead className="font-semibold">Title</TableHead>
               <TableHead className="font-semibold">Phone</TableHead>
               <TableHead className="font-semibold">
                 <button onClick={() => toggleSort("call_outcome")} className="flex items-center gap-1">
@@ -274,7 +273,7 @@ function ContactsContent() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-16">
+                <TableCell colSpan={6} className="text-center py-16">
                   <div className="flex items-center justify-center text-muted-foreground">
                     <Loader2 size={18} className="mr-2 animate-spin" /> Loading contacts...
                   </div>
@@ -282,7 +281,7 @@ function ContactsContent() {
               </TableRow>
             ) : contacts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center py-16">
+                <TableCell colSpan={6} className="text-center py-16">
                   <div className="flex flex-col items-center gap-2">
                     <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
                       <Users size={16} className="text-muted-foreground" />
@@ -306,9 +305,6 @@ function ContactsContent() {
                   </TableCell>
                   <TableCell className="text-sm">
                     {c.company_name}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {c.title || "—"}
                   </TableCell>
                   <TableCell className="text-sm font-mono text-muted-foreground">
                     {phoneDisplay(c) || "—"}

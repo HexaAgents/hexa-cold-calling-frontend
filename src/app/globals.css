@@ -95,6 +95,59 @@ body::after {
   pointer-events: none;
 }
 
+@keyframes progress-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes progress-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+.progress-track {
+  background: hsl(var(--muted));
+  border-radius: 9999px;
+}
+
+.progress-fill {
+  background: hsl(217 70% 55%);
+  border-radius: 9999px;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-fill-destructive {
+  background: hsl(0 60% 50%);
+  border-radius: 9999px;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-fill-complete {
+  background: hsl(160 55% 42%);
+  border-radius: 9999px;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    transparent 100%
+  );
+  animation: progress-shimmer 1.8s ease-in-out infinite;
+}
+
+.progress-processing {
+  animation: progress-pulse 2s ease-in-out infinite;
+}
+
 .side-pane-dark {
   background: linear-gradient(180deg, #080808 0%, #1a1a1a 50%, #080808 100%);
   color: #e5e5e5;
