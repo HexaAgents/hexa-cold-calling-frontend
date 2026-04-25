@@ -62,13 +62,13 @@ function pct(n: number, total: number) {
 function OutcomeBar({ breakdown }: { breakdown: OutcomeBreakdown }) {
   const t = breakdown.total || 1;
   const segments = [
-    { key: "didnt_pick_up", value: breakdown.didnt_pick_up, label: "Didn't Pick Up", className: "bg-amber-500" },
-    { key: "interested", value: breakdown.interested, label: "Interested", className: "bg-green-500" },
-    { key: "not_interested", value: breakdown.not_interested, label: "Not Interested", className: "bg-red-500" },
-    { key: "bad_number", value: breakdown.bad_number, label: "Bad Number", className: "bg-zinc-400" },
+    { key: "didnt_pick_up", value: breakdown.didnt_pick_up, label: "Didn't Pick Up", className: "bg-amber-400/70" },
+    { key: "interested", value: breakdown.interested, label: "Interested", className: "bg-emerald-400/70" },
+    { key: "not_interested", value: breakdown.not_interested, label: "Not Interested", className: "bg-rose-400/70" },
+    { key: "bad_number", value: breakdown.bad_number, label: "Bad Number", className: "bg-zinc-300 dark:bg-zinc-500" },
   ];
   if (breakdown.other > 0) {
-    segments.push({ key: "other", value: breakdown.other, label: "Other", className: "bg-blue-400" });
+    segments.push({ key: "other", value: breakdown.other, label: "Other", className: "bg-slate-300 dark:bg-slate-500" });
   }
 
   return (
@@ -173,28 +173,28 @@ function ProductivityContent() {
             label="Didn't Pick Up"
             value={overall.didnt_pick_up}
             sub={`${pct(overall.didnt_pick_up, overall.total)}%`}
-            className="text-amber-600"
+            className="text-amber-500/80"
           />
           <SummaryCard
             icon={<ThumbsUp size={16} />}
             label="Interested"
             value={overall.interested}
             sub={`${pct(overall.interested, overall.total)}%`}
-            className="text-green-600"
+            className="text-emerald-500/80"
           />
           <SummaryCard
             icon={<ThumbsDown size={16} />}
             label="Not Interested"
             value={overall.not_interested}
             sub={`${pct(overall.not_interested, overall.total)}%`}
-            className="text-red-600"
+            className="text-rose-500/80"
           />
           <SummaryCard
             icon={<PhoneOff size={16} />}
             label="Bad Number"
             value={overall.bad_number}
             sub={`${pct(overall.bad_number, overall.total)}%`}
-            className="text-zinc-500"
+            className="text-zinc-400"
           />
         </div>
       )}
@@ -216,10 +216,10 @@ function ProductivityContent() {
                 <ArrowRight size={16} className="text-muted-foreground/50 -ml-1" />
               </div>
               <div className="flex flex-col gap-2">
-                <FlowNode label="Didn't Pick Up" value={overall.didnt_pick_up} pctVal={pct(overall.didnt_pick_up, overall.total)} barPct={(overall.didnt_pick_up / (overall.total || 1)) * 100} barColor="bg-amber-500" className="border-amber-200 dark:border-amber-800" />
-                <FlowNode label="Interested" value={overall.interested} pctVal={pct(overall.interested, overall.total)} barPct={(overall.interested / (overall.total || 1)) * 100} barColor="bg-green-500" className="border-green-200 dark:border-green-800" />
-                <FlowNode label="Not Interested" value={overall.not_interested} pctVal={pct(overall.not_interested, overall.total)} barPct={(overall.not_interested / (overall.total || 1)) * 100} barColor="bg-red-500" className="border-red-200 dark:border-red-800" />
-                <FlowNode label="Bad Number" value={overall.bad_number} pctVal={pct(overall.bad_number, overall.total)} barPct={(overall.bad_number / (overall.total || 1)) * 100} barColor="bg-zinc-400" className="border-zinc-200 dark:border-zinc-700" />
+                <FlowNode label="Didn't Pick Up" value={overall.didnt_pick_up} pctVal={pct(overall.didnt_pick_up, overall.total)} barPct={(overall.didnt_pick_up / (overall.total || 1)) * 100} barColor="bg-amber-400/70" className="border-border" />
+                <FlowNode label="Interested" value={overall.interested} pctVal={pct(overall.interested, overall.total)} barPct={(overall.interested / (overall.total || 1)) * 100} barColor="bg-emerald-400/70" className="border-border" />
+                <FlowNode label="Not Interested" value={overall.not_interested} pctVal={pct(overall.not_interested, overall.total)} barPct={(overall.not_interested / (overall.total || 1)) * 100} barColor="bg-rose-400/70" className="border-border" />
+                <FlowNode label="Bad Number" value={overall.bad_number} pctVal={pct(overall.bad_number, overall.total)} barPct={(overall.bad_number / (overall.total || 1)) * 100} barColor="bg-zinc-300 dark:bg-zinc-500" className="border-border" />
               </div>
             </div>
             <Separator className="my-6" />
@@ -252,7 +252,7 @@ function ProductivityContent() {
                       {u.breakdown.total} call{u.breakdown.total !== 1 ? "s" : ""}
                     </Badge>
                     {u.breakdown.interested > 0 && (
-                      <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-green-300 dark:border-green-700 text-xs tabular-nums">
+                      <Badge variant="outline" className="text-xs tabular-nums text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800">
                         {u.breakdown.interested} interested
                       </Badge>
                     )}

@@ -925,15 +925,17 @@ function CallTracker({ user }: { user: User }) {
       )}
 
       {!claimExpired && isDisabledByHours && (
-        <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 p-4">
-          <Clock size={16} className="text-amber-600 dark:text-amber-400 shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">Outside business hours</p>
-            <p className="text-xs text-amber-700 dark:text-amber-400">
-              It&apos;s currently outside business hours for this contact. Skip to the next contact or come back later.
+        <div className="mb-5 rounded-lg border border-border bg-card p-5 flex items-center gap-4">
+          <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
+            <Clock size={18} className="text-muted-foreground" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium">Outside business hours</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              It&apos;s past working hours in this contact&apos;s timezone. Skip to the next contact or come back later.
             </p>
           </div>
-          <Button variant="outline" size="sm" className="ml-auto shrink-0" onClick={handleNext}>
+          <Button size="sm" onClick={handleNext} className="shrink-0">
             Skip <ChevronRight size={14} className="ml-1" />
           </Button>
         </div>
