@@ -53,6 +53,10 @@ async function refreshIfNeeded(): Promise<boolean> {
   return refreshPromise;
 }
 
+export async function ensureFreshToken(): Promise<void> {
+  await tryRefreshToken();
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {}

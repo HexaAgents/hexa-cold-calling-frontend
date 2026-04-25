@@ -540,7 +540,7 @@ function CallTracker({ user }: { user: User }) {
 
   const isDisabledByHours = outsideBusinessHours && !displayContact?.call_outcome && !hasLoggedThisCall;
 
-  const CLAIM_TIMEOUT_MS = 60 * 60 * 1000;
+  const CLAIM_TIMEOUT_MS = 10 * 60 * 60 * 1000;
   useEffect(() => {
     if (!claimedAt || isViewingHistory || hasLoggedThisCall || !contact) return;
     const check = () => {

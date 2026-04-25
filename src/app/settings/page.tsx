@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, type RefObject } from "react";
 import { useSearchParams } from "next/navigation";
 import AuthGuard from "@/components/layout/auth-guard";
 import AppSidebar from "@/components/layout/app-sidebar";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ensureFreshToken } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -184,6 +184,7 @@ function SettingsContent() {
 
   const handleConnectGmail = async () => {
     try {
+      await ensureFreshToken();
       const { url } = await apiFetch<{ url: string }>("/email/oauth/url");
       window.location.href = url;
     } catch (err) {
