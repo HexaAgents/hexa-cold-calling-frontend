@@ -234,3 +234,42 @@ On mount, fetches `GET /settings` and populates the form fields.
 ### Save
 
 Calls `PUT /settings` with the current threshold, retry_days, and template values. Shows a green "Saved" confirmation for 3 seconds after success.
+
+---
+
+## email-tracking/page.tsx — Email Conversation Tracking
+
+Monitors email conversations between the user and contacts they've called or emailed, using the Gmail API to detect replies.
+
+### State
+
+- `contacts`: Array of `TrackedContact` objects with sent/received counts and reply status
+- `loading`, `syncing`: Loading states for initial fetch and manual sync
+- `gmailConnected`: Whether the user's Gmail is linked (shows connect prompt if not)
+- `selectedContactId`, `thread`, `threadLoading`: For the per-contact thread view
+
+### Stats Bar
+
+Four metric cards at the top: Contacts tracked, Emails sent, Emails received, Replies. Computed from the `contacts` array.
+
+### Contact List
+
+A table with columns: Contact (name + company + email), Sent count, Received count, Status, Last Activity. Each row is clickable.
+
+Reply status is shown with color-coded indicators:
+- Green dot / "Replied": contact has both sent and received emails
+- Amber dot / "Awaiting reply": emails sent but no reply received
+- Grey dot / "No emails": no emails exchanged yet
+
+### Thread View
+
+When a contact row is clicked, calls `GET /email/tracking/{contact_id}` and shows a chronological list of sent/received messages. Received emails have a green-tinted card; sent emails use the default card style. Each card shows direction icon, subject, from/to address, date, and a snippet preview.
+
+### Sync
+
+The "Sync Now" button calls `POST /email/tracking/sync` to pull the latest messages from Gmail for all interacted contacts. The sync also runs automatically when a call outcome is logged.
+
+### Empty States
+
+- **Gmail not connected**: Full-page prompt with link to Settings
+- **No tracked conversations**: Explains that tracking starts when call outcomes are logged
