@@ -56,6 +56,7 @@ import {
   ThumbsUp,
   PhoneOff,
   CalendarDays,
+  CalendarClock,
   Mail,
 } from "lucide-react";
 import type { Contact, Note, CallLog, CallLogResponse, CallLogDeleteResponse, EmailLog, Settings, User } from "@/types";
@@ -132,6 +133,12 @@ function CallTracker({ user }: { user: User }) {
   const [emailBody, setEmailBody] = useState("");
   const [emailSending, setEmailSending] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
+  const [scheduleNotes, setScheduleNotes] = useState("");
+  const [scheduleContactId, setScheduleContactId] = useState<string | null>(null);
   const [emailOutcomeContext, setEmailOutcomeContext] = useState<string | null>(null);
   const [emailLogs, setEmailLogs] = useState<EmailLog[]>([]);
   const [gmailConnected, setGmailConnected] = useState(false);
@@ -485,8 +492,36 @@ function CallTracker({ user }: { user: User }) {
           // Template may be empty, that's fine
         }
       }
+
+      if (outcome === "interested") {
+        setScheduleContactId(displayContact.id);
+        setScheduleDate("");
+        setScheduleTime("");
+        setScheduleNotes("");
+        if (!(result.email_prompt_needed && gmailConnected)) {
+          setScheduleDialogOpen(true);
+        }
+      }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleScheduleCall = async () => {
+    if (!scheduleContactId || !scheduleDate || !scheduleTime) return;
+    try {
+      const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+      await apiFetch("/calls/schedule", {
+        method: "POST",
+        body: JSON.stringify({
+          contact_id: scheduleContactId,
+          scheduled_at: scheduledAt,
+          notes: scheduleNotes || null,
+        }),
+      });
+      setScheduleDialogOpen(false);
+    } catch (err) {
+      console.error("Failed to schedule call:", err);
     }
   };
 
@@ -1421,7 +1456,10 @@ function CallTracker({ user }: { user: User }) {
       </div>
 
       {/* Email Compose Dialog */}
-      <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+      <Dialog open={emailDialogOpen} onOpenChange={(open) => {
+        setEmailDialogOpen(open);
+        if (!open && scheduleContactId) setScheduleDialogOpen(true);
+      }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1506,6 +1544,62 @@ function CallTracker({ user }: { user: User }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Schedule Follow-up Call Dialog — appears after interested outcome */}
+      <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarClock size={16} /> Schedule Follow-up Call
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Schedule a follow-up call with this interested contact. You&apos;ll see a countdown on the Scheduled Calls page.
+          </p>
+          <div className="space-y-3 mt-2">
+            <div>
+              <Label htmlFor="schedDate">Date</Label>
+              <Input
+                id="schedDate"
+                type="date"
+                value={scheduleDate}
+                onChange={(e) => setScheduleDate(e.target.value)}
+                min={new Date().toISOString().split("T")[0]}
+              />
+            </div>
+            <div>
+              <Label htmlFor="schedTime">Time</Label>
+              <Input
+                id="schedTime"
+                type="time"
+                value={scheduleTime}
+                onChange={(e) => setScheduleTime(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="schedNotes">Notes (optional)</Label>
+              <Textarea
+                id="schedNotes"
+                value={scheduleNotes}
+                onChange={(e) => setScheduleNotes(e.target.value)}
+                rows={2}
+                placeholder="Agenda, topics to discuss..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setScheduleDialogOpen(false)}>
+              Skip
+            </Button>
+            <Button
+              onClick={handleScheduleCall}
+              disabled={!scheduleDate || !scheduleTime}
+            >
+              Schedule Call
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Outcome Prompt Dialog — appears after call ends */}
       <Dialog open={outcomeDialogOpen} onOpenChange={setOutcomeDialogOpen}>
         <DialogContent>

@@ -197,3 +197,16 @@ export interface CompanyDetail {
   company: CompanySummary;
   contacts: Contact[];
 }
+
+export interface ScheduledCall {
+  id: string;
+  contact_id: string;
+  user_id: string;
+  scheduled_at: string;
+  notes: string | null;
+  status: "pending" | "completed" | "cancelled";
+  created_at: string;
+  contact_name: string;
+  company_name: string;
+  user_name: string;
+}
