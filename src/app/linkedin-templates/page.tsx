@@ -390,9 +390,14 @@ function TemplatesContent() {
                 Angle: {selected.angle}
               </p>
             </div>
-            <Badge variant="secondary" className="text-xs flex-shrink-0">
-              {selected.category}
-            </Badge>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Badge variant="outline" className="text-xs tabular-nums">
+                {currentText.trim().split(/\s+/).filter(Boolean).length} words
+              </Badge>
+              <Badge variant="secondary" className="text-xs">
+                {selected.category}
+              </Badge>
+            </div>
           </div>
 
           <div className="rounded-lg border border-border bg-card overflow-hidden">
