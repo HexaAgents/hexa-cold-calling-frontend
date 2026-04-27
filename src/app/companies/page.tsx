@@ -6,7 +6,6 @@ import AuthGuard from "@/components/layout/auth-guard";
 import AppSidebar from "@/components/layout/app-sidebar";
 import { apiFetch } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -24,10 +23,8 @@ import {
   ExternalLink,
   Users,
   Globe,
-  Linkedin,
+  Link2,
   MapPin,
-  Briefcase,
-  BarChart3,
   Phone,
   Mail,
 } from "lucide-react";
@@ -61,7 +58,7 @@ function CompaniesContent() {
   const [companies, setCompanies] = useState<CompanySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [detail, setDetail] = useState<CompanyDetail | null>(null);
@@ -173,7 +170,7 @@ function CompaniesContent() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
             >
-              <Linkedin size={13} /> LinkedIn <ExternalLink size={10} />
+              <Link2 size={13} /> LinkedIn <ExternalLink size={10} />
             </a>
           )}
         </div>
@@ -326,7 +323,7 @@ function CompaniesContent() {
                     )}
                     {c.company_linkedin_url && (
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Linkedin size={10} /> LinkedIn
+                        <Link2 size={10} /> LinkedIn
                       </span>
                     )}
                   </div>
