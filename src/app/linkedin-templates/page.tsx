@@ -394,6 +394,9 @@ function TemplatesContent() {
               <Badge variant="outline" className="text-xs tabular-nums">
                 {currentText.trim().split(/\s+/).filter(Boolean).length} words
               </Badge>
+              <Badge variant="outline" className="text-xs tabular-nums">
+                {currentText.length} chars
+              </Badge>
               <Badge variant="secondary" className="text-xs">
                 {selected.category}
               </Badge>
