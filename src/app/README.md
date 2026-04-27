@@ -280,3 +280,32 @@ Chronological sent/received messages with direction indicators and snippet previ
 ### Sync
 
 "Sync Now" button calls `POST /email/tracking/sync`. Also auto-syncs when call outcomes are logged.
+
+---
+
+## linkedin-templates/page.tsx — LinkedIn Outreach Templates
+
+13 role-specific LinkedIn outreach message templates for industrial distribution sales.
+
+### Layout
+
+Split-panel design: left sidebar with role categories, right panel with the selected template.
+
+### Role Categories
+
+- **Executive**: CEO/President/Owner/MD, COO/VP Operations, CFO/VP Finance
+- **Supply Chain & Procurement**: VP/Director Supply Chain, VP/Director Procurement, Purchasing Manager
+- **Operations & Sales**: Director of Operations/Plant Manager, Director of Sales Operations, Operations Manager, Sales Manager
+- **Support Functions**: IT Director/VP IT, Warehouse/Distribution Manager, Controller/Accounting Manager
+
+### Features
+
+- Collapsible category sections in the role selector
+- Editable textarea with pre-filled template (user customizes before copying)
+- Copy to Clipboard button with "Copied!" confirmation
+- Reset button to restore original template text
+- Fill-in-the-blank placeholders: `[Prospect Name]`, `[Company Name]`, `[Your Name]`, `[Your Company]`, `[Specific Detail]`
+
+### Data
+
+Templates are stored as a static TypeScript constant — no backend API calls needed. Each template targets the specific pain points of that role in the industrial distribution space.

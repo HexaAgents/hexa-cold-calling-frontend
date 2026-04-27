@@ -11,6 +11,7 @@ import {
   BarChart3,
   MailSearch,
   Building2,
+  FileText,
 } from "lucide-react";
 import HexaLogo from "@/components/layout/hexa-logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -22,6 +23,7 @@ const navItems = [
   { name: "Companies", icon: Building2, href: "/companies" },
   { name: "Call Tracker", icon: PhoneCall, href: "/call-tracker" },
   { name: "Email Tracking", icon: MailSearch, href: "/email-tracking" },
+  { name: "Templates", icon: FileText, href: "/linkedin-templates" },
   { name: "Productivity", icon: BarChart3, href: "/productivity" },
   { name: "Import", icon: Upload, href: "/import" },
   { name: "Settings", icon: Settings, href: "/settings" },
