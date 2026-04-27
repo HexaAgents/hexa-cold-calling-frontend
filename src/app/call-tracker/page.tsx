@@ -346,7 +346,8 @@ function CallTracker({ user }: { user: User }) {
       try {
         setCallStatus("Connecting...");
         const device = await initTwilioDevice();
-        const call = await device.connect({ params: { To: phone } });
+        const country = contact.country || "US";
+        const call = await device.connect({ params: { To: phone, Country: country } });
         setActiveCall(call);
         setCallStatus("Ringing...");
 
