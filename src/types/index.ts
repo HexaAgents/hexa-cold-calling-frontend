@@ -178,3 +178,22 @@ export interface TrackedEmail {
   direction: "sent" | "received";
   message_date: string;
 }
+
+export interface CompanySummary {
+  company_name: string;
+  website: string | null;
+  company_linkedin_url: string | null;
+  company_description: string | null;
+  employees: string | null;
+  industry_tag: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  contact_count: number;
+  avg_score: number | null;
+}
+
+export interface CompanyDetail {
+  company: CompanySummary;
+  contacts: Contact[];
+}

@@ -10,6 +10,7 @@ import {
   LogOut,
   BarChart3,
   MailSearch,
+  Building2,
 } from "lucide-react";
 import HexaLogo from "@/components/layout/hexa-logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -18,6 +19,7 @@ import type { User } from "@/types";
 
 const navItems = [
   { name: "Contacts", icon: Users, href: "/contacts" },
+  { name: "Companies", icon: Building2, href: "/companies" },
   { name: "Call Tracker", icon: PhoneCall, href: "/call-tracker" },
   { name: "Email Tracking", icon: MailSearch, href: "/email-tracking" },
   { name: "Productivity", icon: BarChart3, href: "/productivity" },

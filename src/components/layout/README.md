@@ -18,9 +18,9 @@ A 248px dark sidebar matching the Hexa platform demo's exact styling. Rendered o
   └─ User card (avatar + name + email + online dot)
 ```
 
-### Nav Items (lines 18–23)
+### Nav Items (lines 19–27)
 
-Four items defined as a static array: Contacts (`/contacts`), Call Tracker (`/call-tracker`), Import (`/import`), Settings (`/settings`). Each has a name, Lucide icon, and href.
+Seven items defined as a static array: Contacts (`/contacts`), Companies (`/companies`), Call Tracker (`/call-tracker`), Email Tracking (`/email-tracking`), Productivity (`/productivity`), Import (`/import`), Settings (`/settings`). Each has a name, Lucide icon, and href.
 
 ### `isActive(href)` (lines 35–38)
 

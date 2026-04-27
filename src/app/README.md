@@ -234,3 +234,49 @@ On mount, fetches `GET /settings` and populates the form fields.
 ### Save
 
 Calls `PUT /settings` with the current threshold, retry_days, and template values. Shows a green "Saved" confirmation for 3 seconds after success.
+
+---
+
+## companies/page.tsx — Company Directory
+
+Groups contacts by company name and shows company-level information with all associated contacts.
+
+### Two-state page
+
+**List view (default):** Shows all distinct companies in a searchable table with columns: Company (name + website + LinkedIn), Contacts count, Avg Score, Industry, Location. Search debounces at 300ms and filters server-side.
+
+**Detail view (click a company):** Shows company header (name, industry tag, location, employees), description block, external links (website, LinkedIn), and a contacts table (Name, Title, Email, Phone, Score, Status). Each contact row links to `/contacts/{id}`.
+
+### State
+
+- `companies`: Array of `CompanySummary` objects
+- `search`: Debounced search input
+- `selectedCompany`, `detail`: For the detail view
+- `loading`, `detailLoading`: Loading states
+
+### API calls
+
+- `GET /companies?search=X` for the list view
+- `GET /companies/detail?company_name=X` for the detail view
+
+---
+
+## email-tracking/page.tsx — Email Conversation Tracking
+
+Monitors email conversations between the user and contacts they've called or emailed, using the Gmail API to detect replies.
+
+### Stats Bar
+
+Four metric cards: Contacts tracked, Emails sent, Emails received, Replies.
+
+### Contact List
+
+Table with reply status indicators (green = replied, amber = awaiting, grey = none). Click to view thread.
+
+### Thread View
+
+Chronological sent/received messages with direction indicators and snippet previews.
+
+### Sync
+
+"Sync Now" button calls `POST /email/tracking/sync`. Also auto-syncs when call outcomes are logged.
