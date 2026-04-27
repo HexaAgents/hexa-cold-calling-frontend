@@ -1,17 +1,28 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import AuthGuard from "@/components/layout/auth-guard";
 import AppSidebar from "@/components/layout/app-sidebar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   Copy,
   Check,
   RotateCcw,
-  ChevronDown,
   FileText,
+  Search,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,9 +32,10 @@ interface Template {
   category: string;
   angle: string;
   template: string;
+  custom?: boolean;
 }
 
-const TEMPLATES: Template[] = [
+const DEFAULT_TEMPLATES: Template[] = [
   {
     id: "ceo",
     role: "CEO / President / Owner / MD",
@@ -271,7 +283,21 @@ Best,
   },
 ];
 
-const CATEGORIES = ["Executive", "Supply Chain & Procurement", "Operations & Sales", "Support Functions"];
+const STORAGE_KEY = "hexa:custom-templates";
+
+function loadCustomTemplates(): Template[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomTemplates(templates: Template[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(templates));
+}
 
 export default function LinkedInTemplatesPage() {
   return (
@@ -290,14 +316,42 @@ export default function LinkedInTemplatesPage() {
 }
 
 function TemplatesContent() {
-  const [selectedId, setSelectedId] = useState(TEMPLATES[0].id);
+  const [customTemplates, setCustomTemplates] = useState<Template[]>(loadCustomTemplates);
+  const allTemplates = useMemo(() => [...DEFAULT_TEMPLATES, ...customTemplates], [customTemplates]);
+
+  const [selectedId, setSelectedId] = useState(allTemplates[0].id);
   const [editedTexts, setEditedTexts] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState(false);
-  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
+  const [search, setSearch] = useState("");
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [newRole, setNewRole] = useState("");
+  const [newCategory, setNewCategory] = useState("");
+  const [newAngle, setNewAngle] = useState("");
+  const [newBody, setNewBody] = useState("");
 
-  const selected = TEMPLATES.find((t) => t.id === selectedId) || TEMPLATES[0];
+  const selected = allTemplates.find((t) => t.id === selectedId) || allTemplates[0];
   const currentText = editedTexts[selected.id] ?? selected.template;
   const isEdited = editedTexts[selected.id] !== undefined;
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return allTemplates;
+    const q = search.toLowerCase();
+    return allTemplates.filter(
+      (t) =>
+        t.role.toLowerCase().includes(q) ||
+        t.category.toLowerCase().includes(q) ||
+        t.angle.toLowerCase().includes(q) ||
+        t.template.toLowerCase().includes(q)
+    );
+  }, [allTemplates, search]);
+
+  const categories = useMemo(() => {
+    const cats: string[] = [];
+    for (const t of filtered) {
+      if (!cats.includes(t.category)) cats.push(t.category);
+    }
+    return cats;
+  }, [filtered]);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -305,12 +359,12 @@ function TemplatesContent() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      const textarea = document.createElement("textarea");
-      textarea.value = currentText;
-      document.body.appendChild(textarea);
-      textarea.select();
+      const ta = document.createElement("textarea");
+      ta.value = currentText;
+      document.body.appendChild(ta);
+      ta.select();
       document.execCommand("copy");
-      document.body.removeChild(textarea);
+      document.body.removeChild(ta);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -328,55 +382,105 @@ function TemplatesContent() {
     setEditedTexts((prev) => ({ ...prev, [selected.id]: value }));
   };
 
-  const toggleCategory = (cat: string) => {
-    setCollapsedCategories((prev) => ({ ...prev, [cat]: !prev[cat] }));
+  const handleAddTemplate = () => {
+    if (!newRole.trim() || !newBody.trim()) return;
+    const id = `custom-${Date.now()}`;
+    const t: Template = {
+      id,
+      role: newRole.trim(),
+      category: newCategory.trim() || "Custom",
+      angle: newAngle.trim() || "Custom outreach",
+      template: newBody,
+      custom: true,
+    };
+    const updated = [...customTemplates, t];
+    setCustomTemplates(updated);
+    saveCustomTemplates(updated);
+    setSelectedId(id);
+    setAddDialogOpen(false);
+    setNewRole("");
+    setNewCategory("");
+    setNewAngle("");
+    setNewBody("");
+  };
+
+  const handleDeleteCustom = (id: string) => {
+    const updated = customTemplates.filter((t) => t.id !== id);
+    setCustomTemplates(updated);
+    saveCustomTemplates(updated);
+    if (selectedId === id) {
+      setSelectedId(allTemplates[0].id);
+    }
   };
 
   return (
     <div className="flex h-full">
       {/* Role selector panel */}
-      <div className="w-[260px] flex-shrink-0 border-r border-border bg-muted/20 overflow-y-auto">
-        <div className="p-4 pb-2">
-          <h2 className="text-sm font-semibold">LinkedIn Templates</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">13 role-specific outreach messages</p>
+      <div className="w-[260px] flex-shrink-0 border-r border-border overflow-y-auto">
+        <div className="p-4 pb-3">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold">Templates</h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setAddDialogOpen(true)}
+              title="Add template"
+            >
+              <Plus size={14} />
+            </Button>
+          </div>
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search..."
+              className="pl-8 h-8 text-xs"
+            />
+          </div>
         </div>
-        <nav className="px-2 pb-4">
-          {CATEGORIES.map((cat) => {
-            const catTemplates = TEMPLATES.filter((t) => t.category === cat);
-            const isCollapsed = collapsedCategories[cat];
+        <nav className="pb-4">
+          {categories.map((cat) => {
+            const catTemplates = filtered.filter((t) => t.category === cat);
             return (
-              <div key={cat} className="mb-1">
-                <button
-                  onClick={() => toggleCategory(cat)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-                >
+              <div key={cat}>
+                <div className="px-4 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70">
                   {cat}
-                  <ChevronDown
-                    size={12}
-                    className={cn("transition-transform", isCollapsed && "-rotate-90")}
-                  />
-                </button>
-                {!isCollapsed && (
-                  <div className="space-y-0.5">
-                    {catTemplates.map((t) => (
+                </div>
+                {catTemplates.map((t) => (
+                  <button
+                    key={t.id}
+                    onClick={() => setSelectedId(t.id)}
+                    className={cn(
+                      "w-full text-left px-4 py-2 text-[13px] transition-colors flex items-center justify-between group",
+                      selectedId === t.id
+                        ? "bg-primary/10 text-primary font-medium"
+                        : "text-foreground/70 hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    <span className="truncate">{t.role}</span>
+                    {t.custom && (
                       <button
-                        key={t.id}
-                        onClick={() => setSelectedId(t.id)}
-                        className={cn(
-                          "w-full text-left px-3 py-2 text-sm rounded-md transition-colors",
-                          selectedId === t.id
-                            ? "bg-primary/10 text-primary font-medium"
-                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                        )}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteCustom(t.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-0.5"
                       >
-                        {t.role}
+                        <Trash2 size={11} />
                       </button>
-                    ))}
-                  </div>
-                )}
+                    )}
+                  </button>
+                ))}
               </div>
             );
           })}
+          {filtered.length === 0 && (
+            <p className="px-4 py-6 text-xs text-muted-foreground text-center">
+              No templates match your search.
+            </p>
+          )}
         </nav>
       </div>
 
@@ -387,7 +491,7 @@ function TemplatesContent() {
             <div>
               <h1 className="text-xl font-semibold tracking-tight">{selected.role}</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Angle: {selected.angle}
+                {selected.angle}
               </p>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
@@ -456,6 +560,64 @@ function TemplatesContent() {
           </div>
         </div>
       </div>
+
+      {/* Add Template Dialog */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Custom Template</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="newRole">Role / Title</Label>
+              <Input
+                id="newRole"
+                value={newRole}
+                onChange={(e) => setNewRole(e.target.value)}
+                placeholder="e.g. Regional Sales Director"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="newCategory">Category</Label>
+                <Input
+                  id="newCategory"
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  placeholder="e.g. Custom"
+                />
+              </div>
+              <div>
+                <Label htmlFor="newAngle">Approach Angle</Label>
+                <Input
+                  id="newAngle"
+                  value={newAngle}
+                  onChange={(e) => setNewAngle(e.target.value)}
+                  placeholder="e.g. Territory growth"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="newBody">Template Body</Label>
+              <Textarea
+                id="newBody"
+                value={newBody}
+                onChange={(e) => setNewBody(e.target.value)}
+                rows={8}
+                placeholder="Hi [Prospect Name],&#10;&#10;Write your template here..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddTemplate} disabled={!newRole.trim() || !newBody.trim()}>
+              Add Template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
