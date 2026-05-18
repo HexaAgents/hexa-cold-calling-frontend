@@ -205,6 +205,85 @@ describe("CallTrackerPage", () => {
     expect(dateInput.value).toBe("2026-06-15");
   });
 
+  it("re-enables outcome buttons when /calls/next returns a contact previously logged in this session", async () => {
+    // Regression: this is the bug where a user had stale retry contacts
+    // looping through /calls/next. The previous implementation persisted a
+    // savedContactIds blacklist in sessionStorage that never expired, so any
+    // contact whose ID had ever been logged in this tab stayed locked even
+    // after the backend's claim_next_contact RPC cleared its call_outcome.
+    let nextCallCount = 0;
+    mockApiFetch.mockImplementation(async (path: string, options?: RequestInit) => {
+      if (path === "/contacts/locations") return { cities: [], states: [], countries: [] };
+      if (path === "/settings") return MOCK_SETTINGS;
+      if (path.startsWith("/calls/next")) {
+        nextCallCount += 1;
+        // Both calls return the SAME contact with call_outcome=null (mimicking
+        // the SQL RPC that resets call_outcome on every claim).
+        return { ...MOCK_CONTACT, call_outcome: null };
+      }
+      if (path.match(/\/contacts\/[\w-]+\/notes/)) return [];
+      if (path.match(/\/calls\/contact/)) return [];
+      if (path === "/calls/log" && options?.method === "POST") {
+        const body = JSON.parse(options.body as string);
+        return {
+          call_log: {
+            id: `log-${nextCallCount}`,
+            contact_id: body.contact_id,
+            user_id: "test-user-id",
+            call_date: "2026-04-22",
+            call_method: "browser",
+            phone_number_called: body.phone_number_called,
+            outcome: body.outcome,
+            is_new_occasion: true,
+            created_at: "2026-04-22T10:00:00",
+          },
+          sms_prompt_needed: false,
+          occasion_count: 1,
+          times_called: 1,
+          retry_at: null,
+        };
+      }
+      return {};
+    });
+
+    render(<CallTrackerPage />);
+
+    await waitFor(() => expect(screen.getByText("Start Calling")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Start Calling"));
+    await waitFor(() => expect(screen.getByText("Jane Doe")).toBeInTheDocument());
+
+    // First save: select Didn't Pick Up, then click again to log it.
+    const firstClick = screen.getAllByText("Didn't Pick Up");
+    fireEvent.click(firstClick[0]);
+    fireEvent.click(firstClick[0]);
+
+    await waitFor(() => {
+      const logCalls = mockApiFetch.mock.calls.filter(
+        ([path, opts]) => path === "/calls/log" && opts?.method === "POST"
+      );
+      expect(logCalls.length).toBe(1);
+    });
+
+    // Click Next -> /calls/next returns the same contact with call_outcome=null.
+    fireEvent.click(screen.getByText("Next"));
+    await waitFor(() => expect(nextCallCount).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(screen.getByText("Jane Doe")).toBeInTheDocument());
+
+    // Buttons must NOT be locked. Click Didn't Pick Up twice again -> a second
+    // call_log POST should fire. With the old persisted-blacklist bug the
+    // button would be disabled and no second POST would happen.
+    const secondClick = screen.getAllByText("Didn't Pick Up");
+    fireEvent.click(secondClick[0]);
+    fireEvent.click(secondClick[0]);
+
+    await waitFor(() => {
+      const logCalls = mockApiFetch.mock.calls.filter(
+        ([path, opts]) => path === "/calls/log" && opts?.method === "POST"
+      );
+      expect(logCalls.length).toBe(2);
+    });
+  });
+
   it("includes callback_date in the API call body", async () => {
     setupDefaultMocks();
     render(<CallTrackerPage />);

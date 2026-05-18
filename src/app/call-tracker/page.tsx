@@ -93,7 +93,6 @@ function CallTracker({ user }: { user: User }) {
   const [calls, setCalls] = usePersistedState<CallLog[]>("callTracker:calls", []);
   const [outcome, setOutcome] = usePersistedState<string>("callTracker:outcome", "");
   const [outcomeRequired, setOutcomeRequired] = usePersistedState<boolean>("callTracker:outcomeRequired", false);
-  const [savedContactIds, setSavedContactIds] = usePersistedState<string[]>("callTracker:savedContactIds", []);
   const [started, setStarted] = usePersistedState<boolean>("callTracker:started", false);
   const [filterCities, setFilterCities] = usePersistedState<string[]>("callTracker:filterCities", []);
   const [filterStates, setFilterStates] = usePersistedState<string[]>("callTracker:filterStates", []);
@@ -452,9 +451,6 @@ function CallTracker({ user }: { user: User }) {
       setCalls((prev) => [result.call_log, ...prev]);
       setOutcomeRequired(false);
       setOutcomeDialogOpen(false);
-      setSavedContactIds((prev) =>
-        prev.includes(displayContact.id) ? prev : [...prev, displayContact.id]
-      );
       setOutcomeSaved(true);
       setTimeout(() => setOutcomeSaved(false), 3000);
 
@@ -570,9 +566,12 @@ function CallTracker({ user }: { user: User }) {
     await claimNext();
   };
 
-  const hasLoggedThisCall = displayContact
-    ? savedContactIds.includes(displayContact.id)
-    : false;
+  // "Has been logged" is derived from the contact's own call_outcome rather than
+  // a separate persisted ID list. The backend's claim_next_contact RPC clears
+  // call_outcome to NULL when a contact is re-claimed, so this stays in sync
+  // with reality even when /calls/next returns a contact the user previously
+  // logged (a common case for users with overdue retry contacts).
+  const hasLoggedThisCall = !!displayContact?.call_outcome;
 
   const isDisabledByHours = outsideBusinessHours && !displayContact?.call_outcome && !hasLoggedThisCall;
 
@@ -613,8 +612,7 @@ function CallTracker({ user }: { user: User }) {
       setOutcomeSaved(false);
       setCallbackDateSaved(false);
       setOutcomeRequired(false);
-      if (!res.call_outcome && displayContact) {
-        setSavedContactIds((prev) => prev.filter((id) => id !== displayContact.id));
+      if (!res.call_outcome) {
         setCallbackDate("");
       }
     } catch (err) {
