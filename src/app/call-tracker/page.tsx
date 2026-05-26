@@ -147,11 +147,11 @@ function CallTracker({ user }: { user: User }) {
   const [claimExpired, setClaimExpired] = useState(false);
 
   // When a contact hits the "give up after N failed pickups" threshold the
-  // backend tells us to delete it, but only after the SMS / email follow-up
-  // dialogs have had their chance — otherwise /sms/send would fail on a
-  // deleted contact. We stash the id here and the effect below fires the
-  // delete + auto-claim-next once the dialogs are gone.
-  const [pendingDeletionId, setPendingDeletionId] = useState<string | null>(null);
+  // backend silences it (clears retry_at) so it drops out of the call
+  // tracker queue. The contact stays in the database and contacts list.
+  // We track the id here so the UI can show a one-time confirmation and
+  // auto-advance to the next contact once any follow-up dialogs close.
+  const [silencedContactId, setSilencedContactId] = useState<string | null>(null);
 
   const viewingHistoryContact =
     historyIndex !== null ? sessionHistory[sessionHistory.length - 1 - historyIndex] ?? null : null;
@@ -228,7 +228,7 @@ function CallTracker({ user }: { user: User }) {
     setCallbackDate("");
     setClaimExpired(false);
     setClaimedAt(null);
-    setPendingDeletionId(null);
+    setSilencedContactId(null);
     if (contact) {
       setSessionHistory((prev) => {
         if (prev.some((c) => c.id === contact.id)) return prev;
@@ -440,27 +440,21 @@ function CallTracker({ user }: { user: User }) {
     }
   };
 
-  const finalizePendingDeletion = useCallback(async (contactId: string) => {
-    try {
-      await apiFetch(`/contacts/${contactId}`, { method: "DELETE" });
-    } catch (err) {
-      console.error("Failed to delete exhausted contact", err);
-    }
-    setSessionHistory((prev) => prev.filter((c) => c.id !== contactId));
-    setPendingDeletionId(null);
+  // When the contact has been silenced (queue threshold hit), wait for any
+  // SMS / email follow-up dialogs to close, then auto-advance. We never
+  // delete the contact — only move on. Keeping the trigger in an effect
+  // means we don't have to remember to advance from each dialog's close
+  // handler individually.
+  const advanceAfterSilence = useCallback(async () => {
+    setSilencedContactId(null);
     await claimNext();
-  }, [claimNext, setSessionHistory]);
+  }, [claimNext]);
 
-  // Fire the pending deletion once every follow-up dialog is closed. Keeping
-  // the trigger in an effect rather than inlining it in each dialog's close
-  // handler means we don't have to remember the deletion in N different
-  // places — and we naturally handle the "no dialogs needed at all" case
-  // (e.g. SMS was already sent on a prior occasion).
   useEffect(() => {
-    if (!pendingDeletionId) return;
+    if (!silencedContactId) return;
     if (smsDialogOpen || emailDialogOpen) return;
-    void finalizePendingDeletion(pendingDeletionId);
-  }, [pendingDeletionId, smsDialogOpen, emailDialogOpen, finalizePendingDeletion]);
+    void advanceAfterSilence();
+  }, [silencedContactId, smsDialogOpen, emailDialogOpen, advanceAfterSilence]);
 
   const saveOutcome = async () => {
     if (!displayContact || !outcome) return;
@@ -499,8 +493,8 @@ function CallTracker({ user }: { user: User }) {
         );
       }
 
-      if (result.contact_pending_deletion) {
-        setPendingDeletionId(displayContact.id);
+      if (result.contact_silenced) {
+        setSilencedContactId(displayContact.id);
       }
 
       if (result.sms_prompt_needed) {
@@ -1321,11 +1315,12 @@ function CallTracker({ user }: { user: User }) {
               })}
             </div>
           </div>
-          {outcome === "didnt_pick_up" && pendingDeletionId === displayContact.id ? (
+          {outcome === "didnt_pick_up" && silencedContactId === displayContact.id ? (
             <div className="mt-4 flex items-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
               <AlertTriangle size={12} className="text-amber-500" />
               <span>
-                Threshold reached — this contact will be removed from the database after this call.
+                Threshold reached — this contact won&apos;t reappear in the call tracker.
+                They remain in your contacts list.
               </span>
             </div>
           ) : outcome === "didnt_pick_up" && (

@@ -62,7 +62,7 @@ export interface CallLogResponse {
   occasion_count: number;
   times_called: number;
   retry_at: string | null;
-  contact_pending_deletion: boolean;
+  contact_silenced: boolean;
 }
 
 export interface CallLogDeleteResponse {
