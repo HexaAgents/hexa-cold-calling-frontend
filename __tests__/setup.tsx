@@ -16,6 +16,8 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/api", () => ({
   apiFetch: vi.fn(),
   apiUpload: vi.fn(),
+  apiDownload: vi.fn(),
+  ensureFreshToken: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase", () => ({

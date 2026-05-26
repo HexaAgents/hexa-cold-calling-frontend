@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import ImportPage from "@/app/import/page";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiDownload } from "@/lib/api";
 
 const mockApiFetch = vi.mocked(apiFetch);
+const mockApiDownload = vi.mocked(apiDownload);
 
 describe("ImportPage", () => {
   beforeEach(() => {
@@ -106,5 +107,92 @@ describe("ImportPage", () => {
     await waitFor(() => {
       expect(screen.queryByText("Imports")).not.toBeInTheDocument();
     });
+  });
+
+  it("shows a filtered-CSV download button when the backend has one", async () => {
+    const batch = {
+      id: "b9",
+      user_id: "u1",
+      filename: "leads.csv",
+      total_rows: 50,
+      processed_rows: 50,
+      stored_rows: 30,
+      discarded_rows: 20,
+      enriched_rows: 0,
+      enrichment_error: null,
+      status: "completed",
+      has_filtered_csv: true,
+      created_at: "2026-04-20T00:00:00Z",
+    };
+    mockApiFetch.mockImplementation(async (path: string) => {
+      if (path === "/imports/recent") return [batch];
+      if (path === "/apollo/enrich/status") {
+        return {
+          counts_by_status: {
+            pending_enrichment: 0,
+            enriching: 0,
+            enriched: 0,
+            enrichment_failed: 0,
+            enrichment_no_phone: 0,
+          },
+          out_of_credits_count: 0,
+          exhausted_retries_count: 0,
+          stale_enriching_count: 0,
+          out_of_credits: false,
+        };
+      }
+      return [];
+    });
+
+    render(<ImportPage />);
+    const downloadBtn = await screen.findByRole("button", { name: /Filtered CSV/i });
+    fireEvent.click(downloadBtn);
+
+    await waitFor(() => {
+      expect(mockApiDownload).toHaveBeenCalledWith(
+        "/imports/b9/filtered-csv",
+        "leads.filtered.csv",
+      );
+    });
+  });
+
+  it("hides the download button when no filtered CSV is stored yet", async () => {
+    const batch = {
+      id: "b10",
+      user_id: "u1",
+      filename: "leads.csv",
+      total_rows: 50,
+      processed_rows: 50,
+      stored_rows: 30,
+      discarded_rows: 20,
+      enriched_rows: 0,
+      enrichment_error: null,
+      status: "completed",
+      has_filtered_csv: false,
+      created_at: "2026-04-20T00:00:00Z",
+    };
+    mockApiFetch.mockImplementation(async (path: string) => {
+      if (path === "/imports/recent") return [batch];
+      if (path === "/apollo/enrich/status") {
+        return {
+          counts_by_status: {
+            pending_enrichment: 0,
+            enriching: 0,
+            enriched: 0,
+            enrichment_failed: 0,
+            enrichment_no_phone: 0,
+          },
+          out_of_credits_count: 0,
+          exhausted_retries_count: 0,
+          stale_enriching_count: 0,
+          out_of_credits: false,
+        };
+      }
+      return [];
+    });
+
+    render(<ImportPage />);
+    await screen.findByText("leads.csv");
+    expect(screen.queryByRole("button", { name: /Filtered CSV/i })).not.toBeInTheDocument();
   });
 });

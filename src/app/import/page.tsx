@@ -3,9 +3,9 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import AuthGuard from "@/components/layout/auth-guard";
 import AppSidebar from "@/components/layout/app-sidebar";
-import { apiUpload, apiFetch } from "@/lib/api";
+import { apiUpload, apiFetch, apiDownload } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Upload, FileText, AlertCircle, CreditCard, RefreshCw, CheckCircle2, Loader2 } from "lucide-react";
+import { Upload, FileText, AlertCircle, CreditCard, RefreshCw, CheckCircle2, Loader2, Download } from "lucide-react";
 import type { ImportBatch } from "@/types";
 
 type EnrichmentHealth = {
@@ -93,6 +93,7 @@ function ImportContent() {
           enriched_rows: 0,
           enrichment_error: null,
           status: "processing",
+          has_filtered_csv: false,
           created_at: new Date().toISOString(),
         },
         ...prev,
@@ -183,6 +184,8 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
   const isFailed = batch.status === "failed";
   const isProcessing = batch.status === "processing";
   const enriched = batch.enriched_rows ?? 0;
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const fillClass = isFailed
     ? "progress-fill-destructive"
@@ -190,12 +193,27 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
     ? "progress-fill-complete"
     : "progress-fill";
 
+  const handleDownload = async () => {
+    setDownloadError(null);
+    setDownloading(true);
+    try {
+      const suggested = batch.filename.toLowerCase().endsWith(".csv")
+        ? `${batch.filename.slice(0, -4)}.filtered.csv`
+        : `${batch.filename}.filtered.csv`;
+      await apiDownload(`/imports/${batch.id}/filtered-csv`, suggested);
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <div className="border border-border bg-card p-4 transition-all duration-300 hover:border-primary/30">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <FileText size={14} className="text-muted-foreground" />
-          <span className="text-sm font-medium">{batch.filename}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <FileText size={14} className="text-muted-foreground shrink-0" />
+          <span className="text-sm font-medium truncate">{batch.filename}</span>
           {isProcessing && (
             <span className="inline-flex items-center gap-1 text-[10px] font-medium text-primary bg-primary/10 px-1.5 py-0.5">
               <Loader2 size={10} className="animate-spin" />
@@ -213,6 +231,23 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
               <AlertCircle size={10} />
               Failed
             </span>
+          )}
+          {batch.has_filtered_csv && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-xs"
+              onClick={handleDownload}
+              disabled={downloading}
+              title="Download the original CSV with only the contacts that passed scoring"
+            >
+              {downloading ? (
+                <Loader2 size={11} className="mr-1 animate-spin" />
+              ) : (
+                <Download size={11} className="mr-1" />
+              )}
+              Filtered CSV
+            </Button>
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -256,6 +291,13 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
         <div className="mt-2.5 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-2">
           <AlertCircle size={12} className="shrink-0" />
           <span>{batch.enrichment_error} — contacts saved as pending. Add credits and re-import to retry.</span>
+        </div>
+      )}
+
+      {downloadError && (
+        <div className="mt-2.5 flex items-center gap-2 text-xs text-destructive">
+          <AlertCircle size={12} className="shrink-0" />
+          <span>{downloadError}</span>
         </div>
       )}
     </div>
