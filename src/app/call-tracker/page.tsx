@@ -146,6 +146,13 @@ function CallTracker({ user }: { user: User }) {
   const [claimedAt, setClaimedAt] = useState<number | null>(null);
   const [claimExpired, setClaimExpired] = useState(false);
 
+  // When a contact hits the "give up after N failed pickups" threshold the
+  // backend tells us to delete it, but only after the SMS / email follow-up
+  // dialogs have had their chance — otherwise /sms/send would fail on a
+  // deleted contact. We stash the id here and the effect below fires the
+  // delete + auto-claim-next once the dialogs are gone.
+  const [pendingDeletionId, setPendingDeletionId] = useState<string | null>(null);
+
   const viewingHistoryContact =
     historyIndex !== null ? sessionHistory[sessionHistory.length - 1 - historyIndex] ?? null : null;
   const displayContact = viewingHistoryContact ?? contact;
@@ -221,6 +228,7 @@ function CallTracker({ user }: { user: User }) {
     setCallbackDate("");
     setClaimExpired(false);
     setClaimedAt(null);
+    setPendingDeletionId(null);
     if (contact) {
       setSessionHistory((prev) => {
         if (prev.some((c) => c.id === contact.id)) return prev;
@@ -432,6 +440,28 @@ function CallTracker({ user }: { user: User }) {
     }
   };
 
+  const finalizePendingDeletion = useCallback(async (contactId: string) => {
+    try {
+      await apiFetch(`/contacts/${contactId}`, { method: "DELETE" });
+    } catch (err) {
+      console.error("Failed to delete exhausted contact", err);
+    }
+    setSessionHistory((prev) => prev.filter((c) => c.id !== contactId));
+    setPendingDeletionId(null);
+    await claimNext();
+  }, [claimNext, setSessionHistory]);
+
+  // Fire the pending deletion once every follow-up dialog is closed. Keeping
+  // the trigger in an effect rather than inlining it in each dialog's close
+  // handler means we don't have to remember the deletion in N different
+  // places — and we naturally handle the "no dialogs needed at all" case
+  // (e.g. SMS was already sent on a prior occasion).
+  useEffect(() => {
+    if (!pendingDeletionId) return;
+    if (smsDialogOpen || emailDialogOpen) return;
+    void finalizePendingDeletion(pendingDeletionId);
+  }, [pendingDeletionId, smsDialogOpen, emailDialogOpen, finalizePendingDeletion]);
+
   const saveOutcome = async () => {
     if (!displayContact || !outcome) return;
     try {
@@ -467,6 +497,10 @@ function CallTracker({ user }: { user: User }) {
         setContact((prev) =>
           prev ? { ...prev, call_outcome: outcome, call_occasion_count: result.occasion_count, times_called: result.times_called, retry_at: retryAt } : prev
         );
+      }
+
+      if (result.contact_pending_deletion) {
+        setPendingDeletionId(displayContact.id);
       }
 
       if (result.sms_prompt_needed) {
@@ -1287,7 +1321,14 @@ function CallTracker({ user }: { user: User }) {
               })}
             </div>
           </div>
-          {outcome === "didnt_pick_up" && (
+          {outcome === "didnt_pick_up" && pendingDeletionId === displayContact.id ? (
+            <div className="mt-4 flex items-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground">
+              <AlertTriangle size={12} className="text-amber-500" />
+              <span>
+                Threshold reached — this contact will be removed from the database after this call.
+              </span>
+            </div>
+          ) : outcome === "didnt_pick_up" && (
             <div className="mt-4 flex items-center gap-3 border-t border-border pt-4">
               <CalendarDays size={14} className="text-muted-foreground shrink-0" />
               <Label htmlFor="callbackDate" className="text-sm whitespace-nowrap">Callback date</Label>

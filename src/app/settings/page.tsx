@@ -281,7 +281,7 @@ function SettingsContent() {
           <div className="p-6 space-y-5">
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-1.5">
-                <Label htmlFor="threshold">SMS after N call occasions</Label>
+                <Label htmlFor="threshold">SMS &amp; give up after N call occasions</Label>
                 <Input
                   id="threshold"
                   type="number"
@@ -292,7 +292,9 @@ function SettingsContent() {
                   className="w-24"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Prompt to send SMS after this many separate-day attempts.
+                  After this many separate-day attempts, prompt to send an SMS
+                  and remove the contact from the database. Lowering this
+                  immediately purges contacts that are already over the limit.
                 </p>
               </div>
               <div className="space-y-1.5">
