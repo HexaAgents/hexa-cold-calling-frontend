@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Hexa Cold Calling Frontend
 
-## Getting Started
+Next.js App Router frontend for the Hexa cold-calling workflow. The app talks to the FastAPI backend for auth, contacts, call tracking, imports, Gmail follow-up, reporting, and a standalone team to-do list.
 
-First, run the development server:
+## Setup
 
 ```bash
+npm install
+cp .env.example .env.local
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`. The backend defaults to `http://localhost:8000` when `NEXT_PUBLIC_API_URL` is not set.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `npm run dev`: start the Next.js dev server.
+- `npm run lint`: run ESLint.
+- `npm test`: run Vitest once.
+- `npm run test:watch`: run Vitest in watch mode.
+- `npm run build`: build the production app.
 
-## Learn More
+There is no separate `typecheck` script; `next build` performs the production TypeScript/Next validation.
 
-To learn more about Next.js, take a look at the following resources:
+## Environment
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `NEXT_PUBLIC_API_URL`: backend API base URL, for example `http://localhost:8000`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The client stores `access_token` and `user` in `localStorage` after login and sends the token with API requests through `src/lib/api.ts`.
 
-## Deploy on Vercel
+## Project Structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `src/app/`: App Router pages and route-level UI. See `src/app/README.md`.
+- `src/components/layout/`: authenticated shell, sidebar, auth guard, and logo. See `src/components/layout/README.md`.
+- `src/components/ui/`: shared shadcn-style primitives.
+- `src/lib/`: backend API client and utilities. The frontend talks only to the FastAPI backend (via `apiFetch`); it never connects to the database directly.
+- `src/types/`: shared frontend TypeScript interfaces matching backend schemas.
+- `__tests__/`: Vitest and React Testing Library coverage for pages/components.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Development Notes
+
+Most authenticated routes use `AuthGuard` plus `AppSidebar`, then fetch data from the backend through `apiFetch`. Tests mock `@/lib/api`, `next/navigation`, and layout wrappers in `__tests__/setup.tsx`.

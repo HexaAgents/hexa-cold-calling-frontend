@@ -9,6 +9,7 @@ vi.mock("next/navigation", () => ({
     refresh: vi.fn(),
   }),
   usePathname: () => "/contacts",
+  useSearchParams: () => new URLSearchParams(),
   useParams: () => ({ id: "test-id" }),
   redirect: vi.fn(),
 }));
@@ -18,10 +19,6 @@ vi.mock("@/lib/api", () => ({
   apiUpload: vi.fn(),
   apiDownload: vi.fn(),
   ensureFreshToken: vi.fn(),
-}));
-
-vi.mock("@/lib/supabase", () => ({
-  createClient: vi.fn(),
 }));
 
 vi.mock("@/components/layout/auth-guard", () => ({

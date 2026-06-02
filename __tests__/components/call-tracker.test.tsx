@@ -54,6 +54,10 @@ const MOCK_CONTACT = {
   created_at: "2025-01-01T00:00:00",
 };
 
+function localDateString(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 Object.defineProperty(window, "sessionStorage", {
   value: {
     getItem: vi.fn(() => null),
@@ -175,7 +179,7 @@ describe("CallTrackerPage", () => {
       expect(dateInput.value).toBeTruthy();
       const expected = new Date();
       expected.setDate(expected.getDate() + 5);
-      expect(dateInput.value).toBe(expected.toISOString().slice(0, 10));
+      expect(dateInput.value).toBe(localDateString(expected));
     });
   });
 

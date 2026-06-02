@@ -6,10 +6,32 @@ import { apiFetch, apiDownload } from "@/lib/api";
 const mockApiFetch = vi.mocked(apiFetch);
 const mockApiDownload = vi.mocked(apiDownload);
 
+const ENRICHMENT_HEALTH = {
+  counts_by_status: {
+    pending_enrichment: 0,
+    enriching: 0,
+    enriched: 0,
+    enrichment_failed: 0,
+    enrichment_no_phone: 0,
+  },
+  out_of_credits_count: 0,
+  exhausted_retries_count: 0,
+  stale_enriching_count: 0,
+  out_of_credits: false,
+};
+
+function mockRecentImports(batches: unknown[]) {
+  mockApiFetch.mockImplementation(async (path: string) => {
+    if (path === "/imports/recent") return batches;
+    if (path === "/apollo/enrich/status") return ENRICHMENT_HEALTH;
+    return [];
+  });
+}
+
 describe("ImportPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockApiFetch.mockResolvedValue([]);
+    mockRecentImports([]);
   });
 
   it("renders drop zone", async () => {
@@ -29,7 +51,7 @@ describe("ImportPage", () => {
   });
 
   it("shows recent imports when batches exist", async () => {
-    mockApiFetch.mockResolvedValueOnce([
+    mockRecentImports([
       {
         id: "b1",
         user_id: "u1",
@@ -39,7 +61,9 @@ describe("ImportPage", () => {
         stored_rows: 30,
         discarded_rows: 20,
         enriched_rows: 0,
+        enrichment_error: null,
         status: "completed",
+        has_filtered_csv: false,
         created_at: "2026-04-20T00:00:00Z",
       },
     ]);
@@ -48,12 +72,13 @@ describe("ImportPage", () => {
     await waitFor(() => {
       expect(screen.getByText("test.csv")).toBeInTheDocument();
       expect(screen.getByText("50 / 50")).toBeInTheDocument();
-      expect(screen.getByText(/Complete — 30 stored, 20 discarded/)).toBeInTheDocument();
+      expect(screen.getByText("Complete")).toBeInTheDocument();
+      expect(screen.getByText("30 stored, 20 discarded")).toBeInTheDocument();
     });
   });
 
   it("shows progress bar for processing batch", async () => {
-    mockApiFetch.mockResolvedValueOnce([
+    mockRecentImports([
       {
         id: "b2",
         user_id: "u1",
@@ -63,7 +88,9 @@ describe("ImportPage", () => {
         stored_rows: 25,
         discarded_rows: 15,
         enriched_rows: 10,
+        enrichment_error: null,
         status: "processing",
+        has_filtered_csv: false,
         created_at: "2026-04-20T00:00:00Z",
       },
     ]);
@@ -78,7 +105,7 @@ describe("ImportPage", () => {
   });
 
   it("shows failed state", async () => {
-    mockApiFetch.mockResolvedValueOnce([
+    mockRecentImports([
       {
         id: "b3",
         user_id: "u1",
@@ -88,7 +115,9 @@ describe("ImportPage", () => {
         stored_rows: 10,
         discarded_rows: 20,
         enriched_rows: 0,
+        enrichment_error: null,
         status: "failed",
+        has_filtered_csv: false,
         created_at: "2026-04-20T00:00:00Z",
       },
     ]);
@@ -101,7 +130,7 @@ describe("ImportPage", () => {
   });
 
   it("shows empty state with no batches", async () => {
-    mockApiFetch.mockResolvedValueOnce([]);
+    mockRecentImports([]);
 
     render(<ImportPage />);
     await waitFor(() => {
@@ -126,21 +155,7 @@ describe("ImportPage", () => {
     };
     mockApiFetch.mockImplementation(async (path: string) => {
       if (path === "/imports/recent") return [batch];
-      if (path === "/apollo/enrich/status") {
-        return {
-          counts_by_status: {
-            pending_enrichment: 0,
-            enriching: 0,
-            enriched: 0,
-            enrichment_failed: 0,
-            enrichment_no_phone: 0,
-          },
-          out_of_credits_count: 0,
-          exhausted_retries_count: 0,
-          stale_enriching_count: 0,
-          out_of_credits: false,
-        };
-      }
+      if (path === "/apollo/enrich/status") return ENRICHMENT_HEALTH;
       return [];
     });
 
@@ -173,21 +188,7 @@ describe("ImportPage", () => {
     };
     mockApiFetch.mockImplementation(async (path: string) => {
       if (path === "/imports/recent") return [batch];
-      if (path === "/apollo/enrich/status") {
-        return {
-          counts_by_status: {
-            pending_enrichment: 0,
-            enriching: 0,
-            enriched: 0,
-            enrichment_failed: 0,
-            enrichment_no_phone: 0,
-          },
-          out_of_credits_count: 0,
-          exhausted_retries_count: 0,
-          stale_enriching_count: 0,
-          out_of_credits: false,
-        };
-      }
+      if (path === "/apollo/enrich/status") return ENRICHMENT_HEALTH;
       return [];
     });
 

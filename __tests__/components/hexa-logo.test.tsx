@@ -3,9 +3,9 @@ import { render, screen } from "@testing-library/react";
 import HexaLogo from "@/components/layout/hexa-logo";
 
 describe("HexaLogo", () => {
-  it("renders the H letter", () => {
+  it("renders the logo image", () => {
     render(<HexaLogo />);
-    expect(screen.getByText("H")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Hexa" })).toBeInTheDocument();
   });
 
   it("shows text when showText is true", () => {

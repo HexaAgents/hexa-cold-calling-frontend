@@ -57,7 +57,10 @@ function ImportContent() {
   }, []);
 
   useEffect(() => {
-    fetchBatches();
+    const timeout = setTimeout(() => {
+      void fetchBatches();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [fetchBatches]);
 
   useEffect(() => {
@@ -319,9 +322,14 @@ function EnrichmentHealthBanner() {
   }, []);
 
   useEffect(() => {
-    fetchHealth();
+    const timeout = setTimeout(() => {
+      void fetchHealth();
+    }, 0);
     const interval = setInterval(fetchHealth, 15000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
   }, [fetchHealth]);
 
   const handleRetry = async () => {

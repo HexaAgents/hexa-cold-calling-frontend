@@ -18,6 +18,7 @@ describe("AppSidebar", () => {
     render(<AppSidebar user={testUser} />);
     expect(screen.getByText("Contacts")).toBeInTheDocument();
     expect(screen.getByText("Call Tracker")).toBeInTheDocument();
+    expect(screen.getByText("To-Do")).toBeInTheDocument();
     expect(screen.getByText("Productivity")).toBeInTheDocument();
     expect(screen.getByText("Import")).toBeInTheDocument();
     expect(screen.getByText("Settings")).toBeInTheDocument();
@@ -26,6 +27,11 @@ describe("AppSidebar", () => {
   it("renders Hexa logo", () => {
     render(<AppSidebar user={testUser} />);
     expect(screen.getByText("Hexa")).toBeInTheDocument();
+  });
+
+  it("links the To-Do tab to /todo-list", () => {
+    render(<AppSidebar user={testUser} />);
+    expect(screen.getByText("To-Do").closest("a")).toHaveAttribute("href", "/todo-list");
   });
 
   it("shows user name and email", () => {

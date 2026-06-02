@@ -87,7 +87,6 @@ export default function SettingsPage() {
 
 function SettingsContent() {
   const searchParams = useSearchParams();
-  const [settings, setSettings] = useState<Settings | null>(null);
   const [threshold, setThreshold] = useState(3);
   const [retryDays, setRetryDays] = useState(3);
   const [template, setTemplate] = useState("");
@@ -112,7 +111,6 @@ function SettingsContent() {
   useEffect(() => {
     apiFetch<Settings>("/settings")
       .then((s) => {
-        setSettings(s);
         setThreshold(s.sms_call_threshold);
         setRetryDays(s.retry_days);
         setTemplate(s.sms_template);
@@ -134,15 +132,17 @@ function SettingsContent() {
   }, []);
 
   useEffect(() => {
-    if (searchParams.get("gmail") === "connected") {
-      setGmailConnected(true);
+    if (searchParams.get("gmail") !== "connected") return;
+
+    const timeout = setTimeout(() => {
       apiFetch<{ connected: boolean; gmail_address: string | null }>("/email/oauth/status")
         .then((s) => {
           setGmailConnected(s.connected);
           setGmailAddress(s.gmail_address);
         })
         .catch(() => {});
-    }
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [searchParams]);
 
   const handleSave = async () => {
@@ -155,7 +155,9 @@ function SettingsContent() {
           sms_template: template,
         }),
       });
-      setSettings(updated);
+      setThreshold(updated.sms_call_threshold);
+      setRetryDays(updated.retry_days);
+      setTemplate(updated.sms_template);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -174,7 +176,10 @@ function SettingsContent() {
           email_template_interested: emailTemplateInterested,
         }),
       });
-      setSettings(updated);
+      setEmailSubjectDidntPickUp(updated.email_subject_didnt_pick_up || "");
+      setEmailTemplateDidntPickUp(updated.email_template_didnt_pick_up || "");
+      setEmailSubjectInterested(updated.email_subject_interested || "");
+      setEmailTemplateInterested(updated.email_template_interested || "");
       setEmailSaved(true);
       setTimeout(() => setEmailSaved(false), 3000);
     } catch (err) {

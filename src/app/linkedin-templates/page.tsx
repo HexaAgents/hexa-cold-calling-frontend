@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo } from "react";
 import AuthGuard from "@/components/layout/auth-guard";
 import AppSidebar from "@/components/layout/app-sidebar";
 import { Button } from "@/components/ui/button";

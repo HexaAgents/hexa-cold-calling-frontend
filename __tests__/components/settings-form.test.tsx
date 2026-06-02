@@ -15,7 +15,14 @@ describe("SettingsPage", () => {
           sms_call_threshold: 3,
           retry_days: 3,
           sms_template: "Hi <first_name>, this is Hexa.",
+          email_subject_didnt_pick_up: "",
+          email_template_didnt_pick_up: "",
+          email_subject_interested: "",
+          email_template_interested: "",
         };
+      }
+      if (path === "/email/oauth/status") {
+        return { connected: false, gmail_address: null };
       }
       return {};
     });
@@ -24,7 +31,7 @@ describe("SettingsPage", () => {
   it("renders threshold and template inputs", async () => {
     render(<SettingsPage />);
     await waitFor(() => {
-      expect(screen.getByLabelText("Auto-SMS after N call occasions")).toBeInTheDocument();
+      expect(screen.getByLabelText("SMS & stop after N call occasions")).toBeInTheDocument();
       expect(screen.getByLabelText("SMS Template")).toBeInTheDocument();
     });
   });
@@ -32,7 +39,7 @@ describe("SettingsPage", () => {
   it("loads settings from API", async () => {
     render(<SettingsPage />);
     await waitFor(() => {
-      const thresholdInput = screen.getByLabelText("Auto-SMS after N call occasions") as HTMLInputElement;
+      const thresholdInput = screen.getByLabelText("SMS & stop after N call occasions") as HTMLInputElement;
       expect(thresholdInput.value).toBe("3");
       const retryInput = screen.getByLabelText(/Retry.*after N days/) as HTMLInputElement;
       expect(retryInput.value).toBe("3");
@@ -43,11 +50,16 @@ describe("SettingsPage", () => {
   it("shows variable badges", async () => {
     render(<SettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText("<first_name>")).toBeInTheDocument();
-      expect(screen.getByText("<company_name>")).toBeInTheDocument();
-      expect(screen.getByText("<title>")).toBeInTheDocument();
-      expect(screen.getByText("<website>")).toBeInTheDocument();
+      expect(screen.getAllByText("<first_name>").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("<company_name>").length).toBeGreaterThan(0);
     });
+    expect(screen.queryAllByText("<title>")).toHaveLength(0);
+    expect(screen.queryAllByText("<website>")).toHaveLength(0);
+
+    fireEvent.click(screen.getAllByRole("button", { name: /More/i })[0]);
+
+    expect(screen.getAllByText("<title>").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("<website>").length).toBeGreaterThan(0);
   });
 
   it("renders password change section", async () => {
@@ -84,15 +96,32 @@ describe("SettingsPage", () => {
   it("saves settings on click", async () => {
     mockApiFetch.mockImplementation(async (path: string, options?: RequestInit) => {
       if (path === "/settings" && options?.method === "PUT") {
-        return { id: "s1", sms_call_threshold: 5, sms_template: "updated" };
+        return { id: "s1", sms_call_threshold: 5, retry_days: 3, sms_template: "updated" };
       }
-      return { id: "s1", sms_call_threshold: 3, sms_template: "Hi <first_name>, this is Hexa." };
+      if (path === "/settings") {
+        return {
+          id: "s1",
+          sms_call_threshold: 3,
+          retry_days: 3,
+          sms_template: "Hi <first_name>, this is Hexa.",
+          email_subject_didnt_pick_up: "",
+          email_template_didnt_pick_up: "",
+          email_subject_interested: "",
+          email_template_interested: "",
+        };
+      }
+      if (path === "/email/oauth/status") {
+        return { connected: false, gmail_address: null };
+      }
+      return {};
     });
 
     render(<SettingsPage />);
-    await waitFor(() => screen.getByDisplayValue("3"));
+    await waitFor(() => {
+      expect(screen.getByLabelText("SMS & stop after N call occasions")).toBeInTheDocument();
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save preferences" }));
 
     await waitFor(() => {
       expect(screen.getByText("Saved")).toBeInTheDocument();

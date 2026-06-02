@@ -15,7 +15,7 @@ describe("ProductivityPage", () => {
     render(<ProductivityPage />);
     await waitFor(() => {
       expect(screen.getByText("Productivity")).toBeInTheDocument();
-      expect(screen.getByText("Call outcomes logged per user per day")).toBeInTheDocument();
+      expect(screen.getByText("Call outcomes, conversion flow, and team performance.")).toBeInTheDocument();
     });
   });
 

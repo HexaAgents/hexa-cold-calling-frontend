@@ -60,6 +60,8 @@ import {
   Mail,
 } from "lucide-react";
 import type { Contact, Note, CallLog, CallLogResponse, CallLogDeleteResponse, EmailLog, Settings, User } from "@/types";
+
+const CLAIM_TIMEOUT_MS = 10 * 60 * 60 * 1000;
 import { todayLocalISO, formatLocalDate } from "@/lib/utils";
 import Link from "next/link";
 import { Device, Call } from "@twilio/voice-sdk";
@@ -252,7 +254,26 @@ function CallTracker({ user }: { user: User }) {
     } finally {
       setLoading(false);
     }
-  }, [buildFilterQuery, contact]);
+  }, [
+    buildFilterQuery,
+    contact,
+    setCallbackDate,
+    setCallbackDateSaved,
+    setCalls,
+    setClaimedAt,
+    setClaimExpired,
+    setContact,
+    setHistoryIndex,
+    setLastDialedPhone,
+    setLoading,
+    setNotes,
+    setOutcome,
+    setOutcomeRequired,
+    setOutcomeSaved,
+    setQueueEmpty,
+    setSessionHistory,
+    setSilencedContactId,
+  ]);
 
   const handleStartCalling = async () => {
     setStarted(true);
@@ -277,11 +298,13 @@ function CallTracker({ user }: { user: User }) {
       setOutcomeRequired(false);
       setNewNote("");
       setEditingNote(null);
-      if (displayContact.call_outcome === "didnt_pick_up" && displayContact.retry_at) {
-        setCallbackDate(displayContact.retry_at.slice(0, 10));
-      } else {
-        setCallbackDate("");
-      }
+      queueMicrotask(() => {
+        if (displayContact.call_outcome === "didnt_pick_up" && displayContact.retry_at) {
+          setCallbackDate(displayContact.retry_at.slice(0, 10));
+        } else {
+          setCallbackDate("");
+        }
+      });
     }
 
     let cancelled = false;
@@ -453,7 +476,11 @@ function CallTracker({ user }: { user: User }) {
   useEffect(() => {
     if (!silencedContactId) return;
     if (smsDialogOpen || emailDialogOpen) return;
-    void advanceAfterSilence();
+
+    const timeout = setTimeout(() => {
+      void advanceAfterSilence();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [silencedContactId, smsDialogOpen, emailDialogOpen, advanceAfterSilence]);
 
   const saveOutcome = async () => {
@@ -603,7 +630,6 @@ function CallTracker({ user }: { user: User }) {
 
   const isDisabledByHours = outsideBusinessHours && !displayContact?.call_outcome && !hasLoggedThisCall;
 
-  const CLAIM_TIMEOUT_MS = 10 * 60 * 60 * 1000;
   useEffect(() => {
     if (!claimedAt || isViewingHistory || hasLoggedThisCall || !contact) return;
     const check = () => {

@@ -117,7 +117,10 @@ function ProductivityContent() {
   }, [days]);
 
   useEffect(() => {
-    fetchData();
+    const timeout = setTimeout(() => {
+      void fetchData();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [fetchData]);
 
   const users = data?.users || [];

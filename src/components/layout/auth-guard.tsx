@@ -23,14 +23,19 @@ export default function AuthGuard({ children }: AuthGuardProps) {
       return;
     }
 
+    let parsedUser: User;
     try {
-      setUser(JSON.parse(stored));
+      parsedUser = JSON.parse(stored);
     } catch {
       router.push("/login");
       return;
     }
 
-    setLoading(false);
+    const timeout = setTimeout(() => {
+      setUser(parsedUser);
+      setLoading(false);
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [router, pathname]);
 
   if (loading || !user) {

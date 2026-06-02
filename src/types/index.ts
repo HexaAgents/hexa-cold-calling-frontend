@@ -212,3 +212,22 @@ export interface ScheduledCall {
   company_name: string;
   user_name: string;
 }
+
+export interface Todo {
+  id: string;
+  title: string;
+  description: string | null;
+  assigned_to_id: string | null;
+  assigned_to_name: string | null;
+  assigned_by_id: string;
+  assigned_by_name: string | null;
+  due_date: string | null;
+  is_done: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface TodoAssignee {
+  id: string;
+  first_name: string;
+}

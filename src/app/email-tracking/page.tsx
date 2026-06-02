@@ -103,10 +103,13 @@ function EmailTrackingContent() {
   }, []);
 
   useEffect(() => {
-    apiFetch<{ connected: boolean }>("/email/oauth/status")
-      .then((s) => setGmailConnected(s.connected))
-      .catch(() => setGmailConnected(false));
-    fetchContacts();
+    const timeout = setTimeout(() => {
+      apiFetch<{ connected: boolean }>("/email/oauth/status")
+        .then((s) => setGmailConnected(s.connected))
+        .catch(() => setGmailConnected(false));
+      void fetchContacts();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [fetchContacts]);
 
   const handleSync = async () => {

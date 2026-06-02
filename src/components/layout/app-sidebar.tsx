@@ -13,6 +13,7 @@ import {
   Building2,
   FileText,
   CalendarClock,
+  ListTodo,
 } from "lucide-react";
 import HexaLogo from "@/components/layout/hexa-logo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -24,6 +25,7 @@ const navItems = [
   { name: "Companies", icon: Building2, href: "/companies" },
   { name: "Call Tracker", icon: PhoneCall, href: "/call-tracker" },
   { name: "Scheduled", icon: CalendarClock, href: "/scheduled-calls" },
+  { name: "To-Do", icon: ListTodo, href: "/todo-list" },
   { name: "Email Tracking", icon: MailSearch, href: "/email-tracking" },
   { name: "Templates", icon: FileText, href: "/linkedin-templates" },
   { name: "Productivity", icon: BarChart3, href: "/productivity" },

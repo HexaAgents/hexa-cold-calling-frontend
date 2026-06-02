@@ -117,8 +117,11 @@ function ContactsContent() {
   }, []);
 
   useEffect(() => {
-    fetchContacts();
-    fetchEnrichmentStatus();
+    const timeout = setTimeout(() => {
+      void fetchContacts();
+      void fetchEnrichmentStatus();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [fetchContacts, fetchEnrichmentStatus]);
 
   const handleEnrichAll = async () => {

@@ -6,18 +6,16 @@ import AuthGuard from "@/components/layout/auth-guard";
 import AppSidebar from "@/components/layout/app-sidebar";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   CalendarClock,
   CheckCircle2,
   XCircle,
   Clock,
   Building2,
-  User as UserIcon,
   AlertTriangle,
   ExternalLink,
 } from "lucide-react";
-import type { ScheduledCall, User } from "@/types";
+import type { ScheduledCall } from "@/types";
 
 const USER_COLORS = [
   "bg-blue-500",
@@ -62,7 +60,7 @@ export default function ScheduledCallsPage() {
           <AppSidebar user={user} />
           <main className="relative flex-1 overflow-y-auto bg-background">
             <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-primary/30 via-primary/70 to-primary/30" />
-            <ScheduledCallsContent user={user} />
+            <ScheduledCallsContent />
           </main>
         </div>
       )}
@@ -124,10 +122,11 @@ function CountdownBadge({ scheduledAt }: { scheduledAt: string }) {
   );
 }
 
-function ScheduledCallsContent({ user }: { user: User }) {
+function ScheduledCallsContent() {
   const [calls, setCalls] = useState<ScheduledCall[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "mine">("all");
+  const [now, setNow] = useState(() => Date.now());
 
   const fetchCalls = useCallback(async () => {
     try {
@@ -142,10 +141,20 @@ function ScheduledCallsContent({ user }: { user: User }) {
   }, [filter]);
 
   useEffect(() => {
-    fetchCalls();
+    const timeout = setTimeout(() => {
+      void fetchCalls();
+    }, 0);
     const interval = setInterval(fetchCalls, 60_000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(interval);
+    };
   }, [fetchCalls]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleComplete = async (id: string) => {
     try {
@@ -217,7 +226,7 @@ function ScheduledCallsContent({ user }: { user: User }) {
           {calls.map((call) => {
             const borderColor = getUserColor(call.user_id, "border");
             const dotColor = getUserColor(call.user_id, "dot");
-            const isOverdue = new Date(call.scheduled_at).getTime() < Date.now();
+            const isOverdue = new Date(call.scheduled_at).getTime() < now;
 
             return (
               <div

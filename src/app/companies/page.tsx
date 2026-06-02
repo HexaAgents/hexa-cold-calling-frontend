@@ -77,7 +77,10 @@ function CompaniesContent() {
   }, []);
 
   useEffect(() => {
-    fetchCompanies();
+    const timeout = setTimeout(() => {
+      void fetchCompanies();
+    }, 0);
+    return () => clearTimeout(timeout);
   }, [fetchCompanies]);
 
   const handleSearch = (value: string) => {
