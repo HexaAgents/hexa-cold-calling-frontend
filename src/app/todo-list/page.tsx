@@ -156,7 +156,7 @@ function TodoListContent({ user }: { user: User }) {
               {backlogCount > 0 && (
                 <>
                   <span className="text-border">·</span>
-                  <span className="font-medium text-red-600 dark:text-red-400">{backlogCount} backlogged</span>
+                  <span className="font-medium text-red-600">{backlogCount} overdue</span>
                 </>
               )}
             </div>
@@ -227,7 +227,7 @@ function TodoListContent({ user }: { user: User }) {
                     data-backlogged={backlogged ? "true" : undefined}
                     className={`group transition-colors ${
                       backlogged
-                        ? "bg-red-50/70 hover:bg-red-100/70 dark:bg-red-950/20 dark:hover:bg-red-950/40"
+                        ? "bg-red-50/70 hover:bg-red-100/70"
                         : "hover:bg-muted/40"
                     } ${todo.is_done ? "opacity-65" : ""}`}
                   >
@@ -252,8 +252,8 @@ function TodoListContent({ user }: { user: User }) {
                           {todo.title}
                         </Link>
                         {backlogged && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
-                            <AlertTriangle size={10} /> Backlogged
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 border border-red-200">
+                            <AlertTriangle size={10} /> Overdue
                           </span>
                         )}
                       </div>
@@ -267,7 +267,7 @@ function TodoListContent({ user }: { user: User }) {
                     <TableCell>
                       <span
                         className={`inline-flex items-center gap-1.5 text-sm ${
-                          backlogged ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground"
+                          backlogged ? "font-medium text-red-600" : "text-muted-foreground"
                         }`}
                       >
                         <CalendarDays size={13} className="opacity-70" />

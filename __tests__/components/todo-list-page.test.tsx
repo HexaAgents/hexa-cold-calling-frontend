@@ -67,11 +67,11 @@ describe("TodoListPage", () => {
     });
   });
 
-  it("highlights backlogged (overdue, not done) rows", async () => {
+  it("highlights overdue (not done) rows", async () => {
     mockData([makeTodo({ id: "t-overdue", due_date: "2020-01-01", is_done: false })]);
     render(<TodoListPage />);
     await waitFor(() => {
-      expect(screen.getByText("Backlogged")).toBeInTheDocument();
+      expect(screen.getByText("Overdue")).toBeInTheDocument();
     });
     const row = screen.getByText("Call back the lead").closest("tr");
     expect(row).toHaveAttribute("data-backlogged", "true");
@@ -81,7 +81,7 @@ describe("TodoListPage", () => {
     mockData([makeTodo({ due_date: "2020-01-01", is_done: true })]);
     render(<TodoListPage />);
     await waitFor(() => expect(screen.getByText("Call back the lead")).toBeInTheDocument());
-    expect(screen.queryByText("Backlogged")).not.toBeInTheDocument();
+    expect(screen.queryByText("Overdue")).not.toBeInTheDocument();
   });
 
   it("offers a person filter available to everyone", async () => {

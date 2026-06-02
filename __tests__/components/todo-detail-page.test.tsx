@@ -75,11 +75,11 @@ describe("TodoDetailPage", () => {
     expect(screen.getByText(/assigned to you/i)).toBeInTheDocument();
   });
 
-  it("shows a backlogged warning for overdue tasks", async () => {
+  it("shows an overdue warning for past-due tasks", async () => {
     mockTodo(makeTodo({ due_date: "2020-01-01", is_done: false }));
     render(<TodoDetailPage />);
     await waitFor(() => {
-      expect(screen.getByText(/backlogged/i)).toBeInTheDocument();
+      expect(screen.getByText(/this task is overdue/i)).toBeInTheDocument();
     });
   });
 });

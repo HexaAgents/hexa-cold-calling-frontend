@@ -175,8 +175,8 @@ function TodoDetailContent({ user }: { user: User }) {
       </Link>
 
       {backlogged && (
-        <div className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-400">
-          <AlertTriangle size={15} /> This task is backlogged (past its due date).
+        <div className="mb-4 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <AlertTriangle size={15} /> This task is overdue (past its due date).
         </div>
       )}
 
@@ -187,15 +187,15 @@ function TodoDetailContent({ user }: { user: User }) {
               {todo.title}
             </h1>
             {todo.is_done ? (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 border border-emerald-200">
                 <CheckCircle2 size={12} /> Done
               </span>
             ) : backlogged ? (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-400">
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-700 border border-red-200">
                 <AlertTriangle size={12} /> Overdue
               </span>
             ) : (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800 border border-amber-200">
                 <Circle size={12} /> Open
               </span>
             )}
@@ -221,7 +221,7 @@ function TodoDetailContent({ user }: { user: User }) {
               </div>
               <div className="rounded-lg border border-border bg-muted/20 p-3">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Due date</p>
-                <p className={`inline-flex items-center gap-1.5 ${backlogged ? "text-red-600 dark:text-red-400 font-medium" : "text-foreground"}`}>
+                <p className={`inline-flex items-center gap-1.5 ${backlogged ? "text-red-600 font-medium" : "text-foreground"}`}>
                   <CalendarDays size={14} className="opacity-70" />
                   {formatDate(todo.due_date)}
                 </p>

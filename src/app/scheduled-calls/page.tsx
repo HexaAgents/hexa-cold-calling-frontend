@@ -184,18 +184,23 @@ function ScheduledCallsContent() {
 
   return (
     <div className="py-8 px-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Scheduled Calls</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {calls.length} upcoming follow-up{calls.length !== 1 ? "s" : ""}
-          </p>
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between mb-6">
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+            <CalendarClock size={20} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Scheduled Calls</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {calls.length} upcoming follow-up{calls.length !== 1 ? "s" : ""}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-border p-1">
+        <div className="flex items-center gap-1 rounded-lg border border-border bg-card p-1 shadow-sm">
           <button
             onClick={() => setFilter("all")}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              filter === "all" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              filter === "all" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
             }`}
           >
             All Users
@@ -203,7 +208,7 @@ function ScheduledCallsContent() {
           <button
             onClick={() => setFilter("mine")}
             className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-              filter === "mine" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              filter === "mine" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
             }`}
           >
             My Calls
@@ -212,12 +217,12 @@ function ScheduledCallsContent() {
       </div>
 
       {calls.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center mb-4">
-            <CalendarClock size={24} className="text-muted-foreground" />
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/40 py-20 text-center">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
+            <CalendarClock size={24} />
           </div>
           <h3 className="text-sm font-semibold">No scheduled calls</h3>
-          <p className="text-sm text-muted-foreground mt-1 max-w-md">
+          <p className="mt-1 max-w-md text-sm text-muted-foreground">
             When you mark a contact as &quot;Interested&quot; in the Call Tracker, you&apos;ll be prompted to schedule a follow-up call.
           </p>
         </div>
@@ -231,8 +236,10 @@ function ScheduledCallsContent() {
             return (
               <div
                 key={call.id}
-                className={`rounded-lg border border-border bg-card overflow-hidden border-l-4 ${borderColor} ${
-                  isOverdue ? "ring-1 ring-red-200 dark:ring-red-900/40" : ""
+                className={`group rounded-xl border border-border bg-card overflow-hidden border-l-4 ${borderColor} shadow-sm transition-all hover:shadow-md hover:border-border ${
+                  isOverdue
+                    ? "ring-1 ring-red-500/25 bg-red-50/40 dark:bg-red-950/10"
+                    : "hover:bg-accent/20"
                 }`}
               >
                 <div className="p-5">
@@ -264,7 +271,7 @@ function ScheduledCallsContent() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 text-xs gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                        className="h-8 text-xs gap-1.5 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                         onClick={() => handleComplete(call.id)}
                       >
                         <CheckCircle2 size={13} /> Complete

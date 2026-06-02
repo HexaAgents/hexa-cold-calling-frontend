@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { CheckCircle, Lock, Mail, Unlink, MessageSquare, Phone, RotateCcw, ChevronDown } from "lucide-react";
+import { CheckCircle, Lock, Mail, Unlink, MessageSquare, Phone, RotateCcw, ChevronDown, Palette, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/lib/theme";
 import type { Settings } from "@/types";
 
 const MAIN_VARIABLES = ["<first_name>", "<company_name>", "<your_name>", "<type>"];
@@ -87,6 +88,7 @@ export default function SettingsPage() {
 
 function SettingsContent() {
   const searchParams = useSearchParams();
+  const { isDark, toggleTheme } = useTheme();
   const [threshold, setThreshold] = useState(3);
   const [retryDays, setRetryDays] = useState(3);
   const [template, setTemplate] = useState("");
@@ -250,6 +252,7 @@ function SettingsContent() {
   }
 
   const sections = [
+    { id: "appearance", label: "Appearance" },
     { id: "calling", label: "Calling" },
     { id: "gmail", label: "Gmail" },
     { id: "templates", label: "Email Templates" },
@@ -276,6 +279,47 @@ function SettingsContent() {
             ))}
           </nav>
         </div>
+
+        {/* Appearance */}
+        <section id="appearance" className="rounded-lg border border-border bg-card overflow-hidden scroll-mt-6">
+          <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border bg-muted/30">
+            <Palette size={15} className="text-muted-foreground" />
+            <h2 className="text-sm font-semibold">Appearance</h2>
+          </div>
+          <div className="p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                  {isDark ? <Moon size={16} /> : <Sun size={16} />}
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Dark mode</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isDark
+                      ? "Dark theme is active across the platform."
+                      : "Switch to a dark theme across the platform."}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isDark}
+                aria-label="Toggle dark mode"
+                onClick={toggleTheme}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+                  isDark ? "bg-primary" : "bg-input"
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                    isDark ? "translate-x-5" : "translate-x-0.5"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        </section>
 
         {/* Calling Preferences */}
         <section id="calling" className="rounded-lg border border-border bg-card overflow-hidden scroll-mt-6">

@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Drive `dark:` utilities off a `.dark` class on the root element instead of
+   the OS color-scheme, so the in-app toggle controls the theme deterministically. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: 0 0% 98%;
   --foreground: 220 14% 10%;
@@ -24,6 +28,31 @@
   --input: 220 13% 88%;
   --ring: 33 45% 46%;
   --radius: 0rem;
+}
+
+.dark {
+  --background: 220 16% 8%;
+  --foreground: 220 14% 92%;
+  --card: 220 14% 11%;
+  --card-foreground: 220 14% 92%;
+  --popover: 220 14% 11%;
+  --popover-foreground: 220 14% 92%;
+  --primary: 33 55% 58%;
+  --primary-foreground: 220 24% 8%;
+  --secondary: 220 12% 18%;
+  --secondary-foreground: 220 14% 92%;
+  --muted: 220 12% 16%;
+  --muted-foreground: 220 10% 62%;
+  --accent: 220 12% 22%;
+  --accent-foreground: 220 14% 95%;
+  --destructive: 0 70% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 152 55% 48%;
+  --success-foreground: 0 0% 100%;
+  --border: 220 12% 20%;
+  --input: 220 12% 24%;
+  --ring: 33 55% 58%;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -151,4 +180,21 @@ body::after {
 .side-pane-dark {
   background: linear-gradient(180deg, #080808 0%, #1a1a1a 50%, #080808 100%);
   color: #e5e5e5;
+}
+
+/* The faint grid lines are black; swap to light so they read on a dark surface. */
+.dark body::before {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+/* Ease the switch between light and dark for the main themed surfaces. */
+body,
+.bg-background,
+.bg-card,
+.bg-muted,
+.bg-popover {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
