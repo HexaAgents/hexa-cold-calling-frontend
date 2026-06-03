@@ -11,8 +11,8 @@ This directory contains Next.js App Router pages. Authenticated pages share the 
 - `/companies`: company directory with list and detail views.
 - `/call-tracker`: filtered one-contact-at-a-time calling workflow with Twilio browser calls, outcomes, callback dates, notes, SMS/email prompts, session history, and claim timeout handling.
 - `/scheduled-calls`: follow-up calls across users, with overdue/countdown badges and complete/cancel actions.
-- `/todo-list`: standalone team to-do list. Sortable task table (Task, Assigned to, Assigned by, Due date) sorted by closest due date first (no-due-date tasks last), color-coded person pills, backlogged-row highlighting for overdue/incomplete tasks, a per-person filter, and a create dialog (only the task name is required). Only the assigner can edit, reassign, unassign, mark done, or delete a task; everyone else is read-only.
-- `/todo-list/[id]`: task detail page showing the full description (hidden on the table) with assigner-only edit/reassign/unassign/done/delete controls.
+- `/todo-list`: standalone team to-do list. Sortable task table (Task, Assigned to, Assigned by, Due date) sorted with unfinished tasks first, then finished tasks, with each group ordered by closest due date (no-due-date tasks last). Includes multi-assignee person pills, full-row navigation to details, subtle overdue highlighting, a per-person filter, and a create dialog (only the task name is required). The assigner and any assigned person can edit/reassign/mark done; delete remains assigner-only.
+- `/todo-list/[id]`: task detail page showing the full description (hidden on the table) with multi-assignee edit controls, metadata cards, edit access for assignees, and assigner-only delete actions.
 - `/email-tracking`: Gmail conversation tracking for sent follow-ups and replies.
 - `/productivity`: call outcomes, conversion flow, and team performance reporting.
 - `/import`: Apollo CSV upload, import progress, filtered CSV download, and Apollo enrichment health/retry status.

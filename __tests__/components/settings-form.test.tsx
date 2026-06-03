@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import SettingsPage from "@/app/settings/page";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ensureFreshToken } from "@/lib/api";
 
 const mockApiFetch = vi.mocked(apiFetch);
+const mockEnsureFreshToken = vi.mocked(ensureFreshToken);
 
 describe("SettingsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockEnsureFreshToken.mockResolvedValue(undefined);
     mockApiFetch.mockImplementation(async (path: string) => {
       if (path === "/settings") {
         return {
@@ -23,6 +25,9 @@ describe("SettingsPage", () => {
       }
       if (path === "/email/oauth/status") {
         return { connected: false, gmail_address: null };
+      }
+      if (path === "/email/oauth/url") {
+        return { url: "https://accounts.google.com/o/oauth2/v2/auth?mock=1" };
       }
       return {};
     });
@@ -125,6 +130,71 @@ describe("SettingsPage", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Saved")).toBeInTheDocument();
+    });
+  });
+
+  it("shows disconnected Gmail state and starts the OAuth flow", async () => {
+    const originalLocation = window.location;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { ...originalLocation, href: "http://localhost/settings" },
+    });
+
+    render(<SettingsPage />);
+    await waitFor(() => {
+      expect(screen.getByText("No Gmail account connected.")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Connect Gmail/ }));
+
+    await waitFor(() => {
+      expect(mockEnsureFreshToken).toHaveBeenCalledOnce();
+      expect(mockApiFetch).toHaveBeenCalledWith("/email/oauth/url");
+      expect(window.location.href).toBe("https://accounts.google.com/o/oauth2/v2/auth?mock=1");
+    });
+
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: originalLocation,
+    });
+  });
+
+  it("shows connected Gmail state and disconnects the account", async () => {
+    mockApiFetch.mockImplementation(async (path: string, options?: RequestInit) => {
+      if (path === "/settings") {
+        return {
+          id: "s1",
+          sms_call_threshold: 3,
+          retry_days: 3,
+          sms_template: "Hi <first_name>, this is Hexa.",
+          email_subject_didnt_pick_up: "",
+          email_template_didnt_pick_up: "",
+          email_subject_interested: "",
+          email_template_interested: "",
+        };
+      }
+      if (path === "/email/oauth/status") {
+        return { connected: true, gmail_address: "sender@example.com" };
+      }
+      if (path === "/email/oauth/disconnect" && options?.method === "DELETE") {
+        return { disconnected: true };
+      }
+      return {};
+    });
+
+    render(<SettingsPage />);
+    await waitFor(() => {
+      expect(screen.getByText("sender@example.com")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Disconnect/ }));
+
+    await waitFor(() => {
+      expect(mockApiFetch).toHaveBeenCalledWith(
+        "/email/oauth/disconnect",
+        expect.objectContaining({ method: "DELETE" }),
+      );
+      expect(screen.getByText("No Gmail account connected.")).toBeInTheDocument();
     });
   });
 });

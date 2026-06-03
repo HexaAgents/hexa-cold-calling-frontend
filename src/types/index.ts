@@ -219,6 +219,7 @@ export interface Todo {
   description: string | null;
   assigned_to_id: string | null;
   assigned_to_name: string | null;
+  assignees?: TodoAssignee[];
   assigned_by_id: string;
   assigned_by_name: string | null;
   due_date: string | null;
