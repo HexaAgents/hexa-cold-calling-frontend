@@ -42,8 +42,16 @@ function isBacklogged(todo: Todo): boolean {
   return !todo.is_done && !!todo.due_date && todo.due_date < todayStr();
 }
 
+// Section predicates.
+// Today: everything due today, completed or not.
+// Past: every completed task plus anything overdue from a past due date.
+// All: literally everything (no filtering), including today and past.
 function isDueToday(todo: Todo): boolean {
-  return !todo.is_done && todo.due_date === todayStr();
+  return todo.due_date === todayStr();
+}
+
+function isPast(todo: Todo): boolean {
+  return todo.is_done || (!!todo.due_date && todo.due_date < todayStr());
 }
 
 function sortTodos(todos: Todo[]): Todo[] {
@@ -91,18 +99,21 @@ function AssigneePills({ todo }: { todo: Todo }) {
   );
 }
 
-const SECTION_META: Record<TodoSection, { label: string; description: string }> = {
+const SECTION_META: Record<TodoSection, { label: string; description: string; emptyText: string }> = {
   all: {
     label: "All",
-    description: "Upcoming, unscheduled, and completed tasks",
+    description: "Every task — today, past, upcoming, and completed",
+    emptyText: "Create a task and assign it to someone on the team.",
   },
   today: {
     label: "Today",
-    description: "Open tasks due today",
+    description: "Everything due today, done or not",
+    emptyText: "Nothing is due today.",
   },
   past: {
     label: "Past",
-    description: "Open tasks past their due date",
+    description: "Completed tasks and anything overdue",
+    emptyText: "No completed or overdue tasks yet.",
   },
 };
 
@@ -214,20 +225,22 @@ function TodoListContent({ user }: { user: User }) {
     return todos.filter((t) => getTodoAssignees(t).some((assignee) => assignee.id === filter));
   }, [todos, filter]);
 
-  const sectionCounts = useMemo(() => {
-    const past = personFiltered.filter(isBacklogged).length;
-    const today = personFiltered.filter(isDueToday).length;
-    return {
-      all: personFiltered.length - past - today,
-      today,
-      past,
-    };
-  }, [personFiltered]);
+  const sectionCounts = useMemo(
+    () => ({
+      all: personFiltered.length,
+      today: personFiltered.filter(isDueToday).length,
+      past: personFiltered.filter(isPast).length,
+    }),
+    [personFiltered],
+  );
+
+  // Past shows a red accent only when it actually contains overdue work.
+  const pastOverdueCount = useMemo(() => personFiltered.filter(isBacklogged).length, [personFiltered]);
 
   const filtered = useMemo(() => {
-    if (section === "past") return personFiltered.filter(isBacklogged);
+    if (section === "past") return personFiltered.filter(isPast);
     if (section === "today") return personFiltered.filter(isDueToday);
-    return personFiltered.filter((t) => !isBacklogged(t) && !isDueToday(t));
+    return personFiltered;
   }, [personFiltered, section]);
 
   const openCount = useMemo(() => filtered.filter((t) => !t.is_done).length, [filtered]);
@@ -328,7 +341,7 @@ function TodoListContent({ user }: { user: User }) {
                 <span className="font-semibold">{SECTION_META[key].label}</span>
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                    key === "past" && count > 0
+                    key === "past" && pastOverdueCount > 0
                       ? "bg-rose-500/10 text-rose-600 dark:text-rose-300"
                       : "bg-muted text-muted-foreground"
                   }`}
@@ -349,10 +362,12 @@ function TodoListContent({ user }: { user: User }) {
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
             <ListTodo size={24} />
           </div>
-          <h3 className="text-sm font-semibold">No {SECTION_META[section].label.toLowerCase()} tasks</h3>
+          <h3 className="text-sm font-semibold">
+            {section === "all" ? "No tasks yet" : `No ${SECTION_META[section].label.toLowerCase()} tasks`}
+          </h3>
           <p className="mt-1 max-w-md text-sm text-muted-foreground">
             {filter === "all"
-              ? "Create a task and assign it to someone on the team."
+              ? SECTION_META[section].emptyText
               : "Try another person filter or switch sections to find more tasks."}
           </p>
           <Button size="sm" className="mt-5 gap-1.5" onClick={() => setShowCreate(true)}>

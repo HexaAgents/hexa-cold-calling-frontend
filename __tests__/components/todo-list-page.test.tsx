@@ -70,7 +70,7 @@ describe("TodoListPage", () => {
     });
   });
 
-  it("defaults to the All section and separates past and today tasks into their own sections", async () => {
+  it("defaults to the All section showing everything, and filters Today and Past", async () => {
     mockData([
       makeTodo({ id: "past", title: "Past task", due_date: "2020-01-01", is_done: false }),
       makeTodo({ id: "today", title: "Today task", due_date: TODAY, is_done: false }),
@@ -79,17 +79,39 @@ describe("TodoListPage", () => {
     render(<TodoListPage />);
 
     await waitFor(() => expect(screen.getByText("Future task")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /All/ })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.queryByText("Past task")).not.toBeInTheDocument();
-    expect(screen.queryByText("Today task")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "true");
+    // All contains literally everything, including today and past.
+    expect(screen.getByText("Past task")).toBeInTheDocument();
+    expect(screen.getByText("Today task")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Today/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Today/ }));
     expect(screen.getByText("Today task")).toBeInTheDocument();
     expect(screen.queryByText("Future task")).not.toBeInTheDocument();
+    expect(screen.queryByText("Past task")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Past/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Past/ }));
     expect(screen.getByText("Past task")).toBeInTheDocument();
     expect(screen.queryByText("Today task")).not.toBeInTheDocument();
+    expect(screen.queryByText("Future task")).not.toBeInTheDocument();
+  });
+
+  it("puts completed tasks in Past, and counts everything due today (done or not) in Today", async () => {
+    mockData([
+      makeTodo({ id: "done-future", title: "Done future", due_date: "2099-01-01", is_done: true }),
+      makeTodo({ id: "done-today", title: "Done today", due_date: TODAY, is_done: true }),
+    ]);
+    render(<TodoListPage />);
+    await waitFor(() => expect(screen.getByText("Done future")).toBeInTheDocument());
+
+    // Today: a completed task due today still shows; a completed future task does not.
+    fireEvent.click(screen.getByRole("button", { name: /^Today/ }));
+    expect(screen.getByText("Done today")).toBeInTheDocument();
+    expect(screen.queryByText("Done future")).not.toBeInTheDocument();
+
+    // Past: all completed tasks show, regardless of their due date.
+    fireEvent.click(screen.getByRole("button", { name: /^Past/ }));
+    expect(screen.getByText("Done future")).toBeInTheDocument();
+    expect(screen.getByText("Done today")).toBeInTheDocument();
   });
 
   it("opens on the section from the URL when returning from a task detail", async () => {
@@ -101,15 +123,15 @@ describe("TodoListPage", () => {
     render(<TodoListPage />);
 
     await waitFor(() => expect(screen.getByText("Past task")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /Open tasks past their due date/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Completed tasks and anything overdue/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByText("Future task")).not.toBeInTheDocument();
   });
 
   it("highlights overdue (not done) rows", async () => {
     mockData([makeTodo({ id: "t-overdue", due_date: "2020-01-01", is_done: false })]);
     render(<TodoListPage />);
-    await waitFor(() => expect(screen.getByRole("button", { name: /Past/ })).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /Past/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Past/ })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^Past/ }));
     await waitFor(() => {
       expect(screen.getByText("Overdue")).toBeInTheDocument();
     });
@@ -120,8 +142,8 @@ describe("TodoListPage", () => {
   it("uses a muted red treatment for overdue rows and header count", async () => {
     mockData([makeTodo({ id: "t-overdue", due_date: "2020-01-01", is_done: false })]);
     render(<TodoListPage />);
-    await waitFor(() => expect(screen.getByRole("button", { name: /Past/ })).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /Past/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Past/ })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^Past/ }));
     await waitFor(() => expect(screen.getByText("Overdue")).toBeInTheDocument());
 
     const row = screen.getByText("Call back the lead").closest("tr");
