@@ -35,7 +35,14 @@ function parseTodoSection(value: string | null): TodoSection {
 }
 
 function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Local calendar date (YYYY-MM-DD). Avoid toISOString(), which is UTC and
+  // rolls to the next day in the evening for negative offsets — that would
+  // mis-classify tasks due "today" as overdue/past.
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function isBacklogged(todo: Todo): boolean {
