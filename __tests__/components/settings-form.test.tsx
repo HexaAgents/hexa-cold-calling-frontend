@@ -16,7 +16,6 @@ describe("SettingsPage", () => {
           id: "s1",
           sms_call_threshold: 3,
           retry_days: 3,
-          sms_template: "Hi <first_name>, this is Hexa.",
           email_subject_didnt_pick_up: "",
           email_template_didnt_pick_up: "",
           email_subject_interested: "",
@@ -33,22 +32,20 @@ describe("SettingsPage", () => {
     });
   });
 
-  it("renders threshold and template inputs", async () => {
+  it("renders threshold input", async () => {
     render(<SettingsPage />);
     await waitFor(() => {
-      expect(screen.getByLabelText("SMS & stop after N call occasions")).toBeInTheDocument();
-      expect(screen.getByLabelText("SMS Template")).toBeInTheDocument();
+      expect(screen.getByLabelText("Stop after N call occasions")).toBeInTheDocument();
     });
   });
 
   it("loads settings from API", async () => {
     render(<SettingsPage />);
     await waitFor(() => {
-      const thresholdInput = screen.getByLabelText("SMS & stop after N call occasions") as HTMLInputElement;
+      const thresholdInput = screen.getByLabelText("Stop after N call occasions") as HTMLInputElement;
       expect(thresholdInput.value).toBe("3");
       const retryInput = screen.getByLabelText(/Retry.*after N days/) as HTMLInputElement;
       expect(retryInput.value).toBe("3");
-      expect(screen.getByDisplayValue("Hi <first_name>, this is Hexa.")).toBeInTheDocument();
     });
   });
 
@@ -101,14 +98,13 @@ describe("SettingsPage", () => {
   it("saves settings on click", async () => {
     mockApiFetch.mockImplementation(async (path: string, options?: RequestInit) => {
       if (path === "/settings" && options?.method === "PUT") {
-        return { id: "s1", sms_call_threshold: 5, retry_days: 3, sms_template: "updated" };
+        return { id: "s1", sms_call_threshold: 5, retry_days: 3 };
       }
       if (path === "/settings") {
         return {
           id: "s1",
           sms_call_threshold: 3,
           retry_days: 3,
-          sms_template: "Hi <first_name>, this is Hexa.",
           email_subject_didnt_pick_up: "",
           email_template_didnt_pick_up: "",
           email_subject_interested: "",
@@ -123,7 +119,7 @@ describe("SettingsPage", () => {
 
     render(<SettingsPage />);
     await waitFor(() => {
-      expect(screen.getByLabelText("SMS & stop after N call occasions")).toBeInTheDocument();
+      expect(screen.getByLabelText("Stop after N call occasions")).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole("button", { name: "Save preferences" }));
@@ -166,7 +162,6 @@ describe("SettingsPage", () => {
           id: "s1",
           sms_call_threshold: 3,
           retry_days: 3,
-          sms_template: "Hi <first_name>, this is Hexa.",
           email_subject_didnt_pick_up: "",
           email_template_didnt_pick_up: "",
           email_subject_interested: "",

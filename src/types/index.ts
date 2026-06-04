@@ -28,9 +28,6 @@ export interface Contact {
   times_called: number;
   call_outcome: string | null;
   messaging_status: string | null;
-  sms_sent: boolean;
-  sms_sent_after_calls: number | null;
-  sms_scheduled_at: string | null;
   enrichment_status: string | null;
   retry_at: string | null;
   created_at: string | null;
@@ -57,7 +54,6 @@ export interface CallLog {
 
 export interface CallLogResponse {
   call_log: CallLog;
-  sms_prompt_needed: boolean;
   email_prompt_needed: boolean;
   occasion_count: number;
   times_called: number;
@@ -84,7 +80,6 @@ export interface Note {
 export interface Settings {
   id: string;
   sms_call_threshold: number;
-  sms_template: string;
   retry_days: number;
   email_template_didnt_pick_up: string;
   email_template_interested: string;

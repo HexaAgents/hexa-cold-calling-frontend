@@ -14,7 +14,6 @@ const MOCK_SETTINGS = {
   id: "s1",
   sms_call_threshold: 3,
   retry_days: 5,
-  sms_template: "Hi <first_name>",
 };
 
 const MOCK_CONTACT = {
@@ -46,9 +45,6 @@ const MOCK_CONTACT = {
   times_called: 0,
   call_outcome: null,
   messaging_status: null,
-  sms_sent: false,
-  sms_sent_after_calls: null,
-  sms_scheduled_at: null,
   enrichment_status: null,
   retry_at: null,
   created_at: "2025-01-01T00:00:00",
@@ -105,7 +101,6 @@ describe("CallTrackerPage", () => {
             is_new_occasion: true,
             created_at: "2026-04-22T10:00:00",
           },
-          sms_prompt_needed: false,
           occasion_count: 1,
           times_called: 1,
           retry_at: body.callback_date ?? null,
@@ -241,7 +236,6 @@ describe("CallTrackerPage", () => {
             is_new_occasion: true,
             created_at: "2026-04-22T10:00:00",
           },
-          sms_prompt_needed: false,
           occasion_count: 1,
           times_called: 1,
           retry_at: null,

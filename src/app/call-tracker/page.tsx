@@ -109,8 +109,6 @@ function CallTracker({ user }: { user: User }) {
   const [newNote, setNewNote] = useState("");
   const [editingNote, setEditingNote] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
-  const [smsDialogOpen, setSmsDialogOpen] = useState(false);
-  const [scheduledDate, setScheduledDate] = useState("");
   const [loading, setLoading] = useState(false);
   const [twilioDevice, setTwilioDevice] = useState<Device | null>(null);
   const [activeCall, setActiveCall] = useState<Call | null>(null);
@@ -464,10 +462,9 @@ function CallTracker({ user }: { user: User }) {
   };
 
   // When the contact has been silenced (queue threshold hit), wait for any
-  // SMS / email follow-up dialogs to close, then auto-advance. We never
-  // delete the contact — only move on. Keeping the trigger in an effect
-  // means we don't have to remember to advance from each dialog's close
-  // handler individually.
+  // email follow-up dialog to close, then auto-advance. We never delete the
+  // contact — only move on. Keeping the trigger in an effect means we don't
+  // have to remember to advance from each dialog's close handler individually.
   const advanceAfterSilence = useCallback(async () => {
     setSilencedContactId(null);
     await claimNext();
@@ -475,13 +472,13 @@ function CallTracker({ user }: { user: User }) {
 
   useEffect(() => {
     if (!silencedContactId) return;
-    if (smsDialogOpen || emailDialogOpen) return;
+    if (emailDialogOpen) return;
 
     const timeout = setTimeout(() => {
       void advanceAfterSilence();
     }, 0);
     return () => clearTimeout(timeout);
-  }, [silencedContactId, smsDialogOpen, emailDialogOpen, advanceAfterSilence]);
+  }, [silencedContactId, emailDialogOpen, advanceAfterSilence]);
 
   const saveOutcome = async () => {
     if (!displayContact || !outcome) return;
@@ -522,10 +519,6 @@ function CallTracker({ user }: { user: User }) {
 
       if (result.contact_silenced) {
         setSilencedContactId(displayContact.id);
-      }
-
-      if (result.sms_prompt_needed) {
-        setSmsDialogOpen(true);
       }
 
       if (result.email_prompt_needed && gmailConnected) {
@@ -671,36 +664,6 @@ function CallTracker({ user }: { user: User }) {
       }
     } catch (err) {
       console.error("Failed to delete call log", err);
-    }
-  };
-
-  const handleSendSms = async () => {
-    if (!displayContact) return;
-    try {
-      await apiFetch("/sms/send", {
-        method: "POST",
-        body: JSON.stringify({ contact_id: displayContact.id }),
-      });
-      setSmsDialogOpen(false);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleScheduleSms = async () => {
-    if (!displayContact || !scheduledDate) return;
-    try {
-      await apiFetch("/sms/schedule", {
-        method: "POST",
-        body: JSON.stringify({
-          contact_id: displayContact.id,
-          scheduled_at: new Date(scheduledDate).toISOString(),
-        }),
-      });
-      setSmsDialogOpen(false);
-      setScheduledDate("");
-    } catch (err) {
-      console.error(err);
     }
   };
 
@@ -1567,43 +1530,6 @@ function CallTracker({ user }: { user: User }) {
         </DialogContent>
       </Dialog>
 
-      {/* SMS Dialog */}
-      <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Send SMS to {displayContact?.first_name}?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            This contact has been called {displayContact?.times_called ?? 0} times.
-            Would you like to send a text message?
-          </p>
-          <div className="space-y-3 mt-2">
-            <div>
-              <Label>Or schedule for later</Label>
-              <Input
-                type="datetime-local"
-                value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
-                className="mt-1"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSmsDialogOpen(false)}>
-              Cancel
-            </Button>
-            {scheduledDate ? (
-              <Button onClick={handleScheduleSms}>
-                <Clock size={14} className="mr-1" /> Schedule
-              </Button>
-            ) : (
-              <Button onClick={handleSendSms}>
-                <Send size={14} className="mr-1" /> Send now
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
       {/* Schedule Follow-up Call Dialog — appears after interested outcome */}
       <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
         <DialogContent>

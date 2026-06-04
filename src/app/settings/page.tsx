@@ -91,7 +91,6 @@ function SettingsContent() {
   const { isDark, toggleTheme } = useTheme();
   const [threshold, setThreshold] = useState(3);
   const [retryDays, setRetryDays] = useState(3);
-  const [template, setTemplate] = useState("");
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -115,7 +114,6 @@ function SettingsContent() {
       .then((s) => {
         setThreshold(s.sms_call_threshold);
         setRetryDays(s.retry_days);
-        setTemplate(s.sms_template);
         setEmailSubjectDidntPickUp(s.email_subject_didnt_pick_up || "");
         setEmailTemplateDidntPickUp(s.email_template_didnt_pick_up || "");
         setEmailSubjectInterested(s.email_subject_interested || "");
@@ -154,12 +152,10 @@ function SettingsContent() {
         body: JSON.stringify({
           sms_call_threshold: threshold,
           retry_days: retryDays,
-          sms_template: template,
         }),
       });
       setThreshold(updated.sms_call_threshold);
       setRetryDays(updated.retry_days);
-      setTemplate(updated.sms_template);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
@@ -209,7 +205,6 @@ function SettingsContent() {
     }
   };
 
-  const smsTemplateRef = useRef<HTMLTextAreaElement>(null);
   const emailSubjectDPURef = useRef<HTMLInputElement>(null);
   const emailBodyDPURef = useRef<HTMLTextAreaElement>(null);
   const emailSubjectIntRef = useRef<HTMLInputElement>(null);
@@ -330,7 +325,7 @@ function SettingsContent() {
           <div className="p-6 space-y-5">
             <div className="grid grid-cols-2 gap-6">
               <div className="space-y-1.5">
-                <Label htmlFor="threshold">SMS &amp; stop after N call occasions</Label>
+                <Label htmlFor="threshold">Stop after N call occasions</Label>
                 <Input
                   id="threshold"
                   type="number"
@@ -341,11 +336,10 @@ function SettingsContent() {
                   className="w-24"
                 />
                 <p className="text-xs text-muted-foreground">
-                  After this many separate-day attempts, prompt to send an SMS
-                  and stop showing this contact in the call tracker. The
-                  contact stays in your database and contacts list. Lowering
-                  this immediately silences contacts that are already over
-                  the limit.
+                  After this many separate-day attempts, stop showing this
+                  contact in the call tracker. The contact stays in your
+                  database and contacts list. Lowering this immediately
+                  silences contacts that are already over the limit.
                 </p>
               </div>
               <div className="space-y-1.5">
@@ -363,20 +357,6 @@ function SettingsContent() {
                   Re-queue &quot;didn&apos;t pick up&quot; contacts after this many days.
                 </p>
               </div>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-1.5">
-              <Label htmlFor="template">SMS Template</Label>
-              <Textarea
-                id="template"
-                ref={smsTemplateRef}
-                value={template}
-                onChange={(e) => setTemplate(e.target.value)}
-                rows={3}
-              />
-              <VariableButtons textareaRef={smsTemplateRef} setter={setTemplate} />
             </div>
 
             <div className="flex items-center gap-3 pt-1">
