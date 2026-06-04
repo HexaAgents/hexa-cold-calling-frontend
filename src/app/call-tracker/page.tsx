@@ -95,6 +95,10 @@ function CallTracker({ user }: { user: User }) {
   const [calls, setCalls] = usePersistedState<CallLog[]>("callTracker:calls", []);
   const [outcome, setOutcome] = usePersistedState<string>("callTracker:outcome", "");
   const [outcomeRequired, setOutcomeRequired] = usePersistedState<boolean>("callTracker:outcomeRequired", false);
+  // Set when the user deletes a call log so they can re-select an outcome even
+  // if the contact still has a prior log keeping call_outcome non-null. Reset
+  // whenever the displayed contact changes or a new outcome is saved.
+  const [outcomeUnlocked, setOutcomeUnlocked] = usePersistedState<boolean>("callTracker:outcomeUnlocked", false);
   const [started, setStarted] = usePersistedState<boolean>("callTracker:started", false);
   const [filterCities, setFilterCities] = usePersistedState<string[]>("callTracker:filterCities", []);
   const [filterStates, setFilterStates] = usePersistedState<string[]>("callTracker:filterStates", []);
@@ -222,6 +226,7 @@ function CallTracker({ user }: { user: User }) {
     setOutcomeSaved(false);
     setCallbackDateSaved(false);
     setOutcomeRequired(false);
+    setOutcomeUnlocked(false);
     setCalls([]);
     setNotes([]);
     setLastDialedPhone(null);
@@ -268,6 +273,7 @@ function CallTracker({ user }: { user: User }) {
     setOutcome,
     setOutcomeRequired,
     setOutcomeSaved,
+    setOutcomeUnlocked,
     setQueueEmpty,
     setSessionHistory,
     setSilencedContactId,
@@ -294,6 +300,7 @@ function CallTracker({ user }: { user: User }) {
       setOutcomeSaved(false);
       setCallbackDateSaved(false);
       setOutcomeRequired(false);
+      setOutcomeUnlocked(false);
       setNewNote("");
       setEditingNote(null);
       queueMicrotask(() => {
@@ -498,6 +505,7 @@ function CallTracker({ user }: { user: User }) {
       });
       setCalls((prev) => [result.call_log, ...prev]);
       setOutcomeRequired(false);
+      setOutcomeUnlocked(false);
       setOutcomeDialogOpen(false);
       setOutcomeSaved(true);
       setTimeout(() => setOutcomeSaved(false), 3000);
@@ -619,7 +627,7 @@ function CallTracker({ user }: { user: User }) {
   // call_outcome to NULL when a contact is re-claimed, so this stays in sync
   // with reality even when /calls/next returns a contact the user previously
   // logged (a common case for users with overdue retry contacts).
-  const hasLoggedThisCall = !!displayContact?.call_outcome;
+  const hasLoggedThisCall = !!displayContact?.call_outcome && !outcomeUnlocked;
 
   const isDisabledByHours = outsideBusinessHours && !displayContact?.call_outcome && !hasLoggedThisCall;
 
@@ -655,13 +663,14 @@ function CallTracker({ user }: { user: User }) {
         setContact((prev) => (prev ? updateContactFields(prev) : prev));
       }
 
-      setOutcome(res.call_outcome ?? "");
+      // Clear the selection and unlock the outcome buttons so a different
+      // outcome can be chosen, even when a prior log keeps call_outcome set.
+      setOutcome("");
       setOutcomeSaved(false);
       setCallbackDateSaved(false);
       setOutcomeRequired(false);
-      if (!res.call_outcome) {
-        setCallbackDate("");
-      }
+      setOutcomeUnlocked(true);
+      setCallbackDate("");
     } catch (err) {
       console.error("Failed to delete call log", err);
     }

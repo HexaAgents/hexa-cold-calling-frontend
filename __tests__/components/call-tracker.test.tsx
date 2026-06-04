@@ -282,6 +282,99 @@ describe("CallTrackerPage", () => {
     });
   });
 
+  it("re-enables outcome selection after deleting a log when a prior log keeps call_outcome set", async () => {
+    // Regression: a contact with an existing log in its history. After logging
+    // a new outcome and then deleting that log, the backend reverts the
+    // contact's call_outcome to the prior log's outcome. The outcome buttons
+    // must unlock so a different outcome can be selected and saved.
+    let logCounter = 0;
+    mockApiFetch.mockImplementation(async (path: string, options?: RequestInit) => {
+      if (path === "/contacts/locations") return { cities: [], states: [], countries: [] };
+      if (path === "/settings") return MOCK_SETTINGS;
+      if (path.startsWith("/calls/next")) return { ...MOCK_CONTACT, call_outcome: null };
+      if (path.match(/\/contacts\/[\w-]+\/notes/)) return [];
+      if (path.match(/\/calls\/contact/)) {
+        return [
+          {
+            id: "prior-log",
+            contact_id: MOCK_CONTACT.id,
+            user_id: "test-user-id",
+            call_date: "2026-04-20",
+            call_method: "browser",
+            phone_number_called: MOCK_CONTACT.mobile_phone,
+            outcome: "didnt_pick_up",
+            is_new_occasion: true,
+            created_at: "2026-04-20T10:00:00",
+          },
+        ];
+      }
+      if (path === "/calls/log" && options?.method === "POST") {
+        logCounter += 1;
+        const body = JSON.parse(options.body as string);
+        return {
+          call_log: {
+            id: `log-${logCounter}`,
+            contact_id: body.contact_id,
+            user_id: "test-user-id",
+            call_date: "2026-04-22",
+            call_method: "browser",
+            phone_number_called: body.phone_number_called,
+            outcome: body.outcome,
+            is_new_occasion: true,
+            created_at: "2026-04-22T10:00:00",
+          },
+          occasion_count: 1,
+          times_called: 2,
+          retry_at: body.callback_date ?? null,
+        };
+      }
+      if (options?.method === "DELETE" && path.startsWith("/calls/")) {
+        // A prior log remains, so the contact keeps a (non-null) call_outcome.
+        return { contact_id: MOCK_CONTACT.id, times_called: 1, call_outcome: "didnt_pick_up" };
+      }
+      return {};
+    });
+
+    render(<CallTrackerPage />);
+
+    await waitFor(() => expect(screen.getByText("Start Calling")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Start Calling"));
+    await waitFor(() => expect(screen.getByText("Jane Doe")).toBeInTheDocument());
+
+    // Log a new "didnt_pick_up" outcome (select, then click again to save).
+    const dpu = screen.getAllByText("Didn't Pick Up");
+    fireEvent.click(dpu[0]);
+    fireEvent.click(dpu[0]);
+    await waitFor(() => {
+      const posts = mockApiFetch.mock.calls.filter(
+        ([p, o]) => p === "/calls/log" && o?.method === "POST"
+      );
+      expect(posts.length).toBe(1);
+    });
+
+    // Delete the just-created log (first delete button, newest log first).
+    await waitFor(() => expect(screen.getAllByTitle("Delete call log").length).toBeGreaterThanOrEqual(2));
+    fireEvent.click(screen.getAllByTitle("Delete call log")[0]);
+    await waitFor(() => {
+      expect(
+        mockApiFetch.mock.calls.some(([p, o]) => o?.method === "DELETE" && p === "/calls/log-1")
+      ).toBe(true);
+    });
+
+    // Buttons must now be unlocked: pick a different outcome and save it.
+    const interested = screen.getAllByText("Interested");
+    fireEvent.click(interested[0]);
+    fireEvent.click(interested[0]);
+
+    await waitFor(() => {
+      const posts = mockApiFetch.mock.calls.filter(
+        ([p, o]) => p === "/calls/log" && o?.method === "POST"
+      );
+      expect(posts.length).toBe(2);
+      expect(JSON.parse(posts[1][1]!.body as string).outcome).toBe("interested");
+    });
+  });
+
   it("includes callback_date in the API call body", async () => {
     setupDefaultMocks();
     render(<CallTrackerPage />);
