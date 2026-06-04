@@ -312,7 +312,12 @@ function TodoListContent({ user }: { user: User }) {
               <Filter size={14} className="text-muted-foreground" />
               <SelectValue aria-label="Filter by person" />
             </SelectTrigger>
-            <SelectContent align="end" className="w-42 rounded-xl">
+            <SelectContent
+              position="popper"
+              align="end"
+              sideOffset={6}
+              className="max-h-none w-42 rounded-xl"
+            >
               <SelectItem value="all">All people</SelectItem>
               <SelectItem value="unassigned">Unassigned</SelectItem>
               {assignees.map((a) => (
