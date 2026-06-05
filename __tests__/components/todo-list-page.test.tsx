@@ -14,9 +14,6 @@ const ASSIGNEES: TodoAssignee[] = [
   { id: "u-srijan", first_name: "Srijan" },
 ];
 
-const _now = new Date();
-const TODAY = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
-
 function makeTodo(overrides: Partial<Todo>): Todo {
   return {
     id: "t-1",
@@ -71,83 +68,87 @@ describe("TodoListPage", () => {
     });
   });
 
-  it("defaults to the All section showing everything, and filters Today and Past", async () => {
+  it("defaults to the Upcoming section and filters Overdue and Complete", async () => {
     mockData([
-      makeTodo({ id: "past", title: "Past task", due_date: "2020-01-01", is_done: false }),
-      makeTodo({ id: "today", title: "Today task", due_date: TODAY, is_done: false }),
+      makeTodo({ id: "overdue", title: "Overdue task", due_date: "2020-01-01", is_done: false }),
       makeTodo({ id: "future", title: "Future task", due_date: "2099-01-01", is_done: false }),
+      makeTodo({ id: "done", title: "Done task", due_date: "2099-01-01", is_done: true }),
     ]);
     render(<TodoListPage />);
 
     await waitFor(() => expect(screen.getByText("Future task")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "true");
-    // All contains literally everything, including today and past.
-    expect(screen.getByText("Past task")).toBeInTheDocument();
-    expect(screen.getByText("Today task")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Upcoming/ })).toHaveAttribute("aria-pressed", "true");
+    // Upcoming: only open tasks that are not overdue.
+    expect(screen.queryByText("Overdue task")).not.toBeInTheDocument();
+    expect(screen.queryByText("Done task")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /^Today/ }));
-    expect(screen.getByText("Today task")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Overdue/ }));
+    expect(screen.getByText("Overdue task")).toBeInTheDocument();
     expect(screen.queryByText("Future task")).not.toBeInTheDocument();
-    expect(screen.queryByText("Past task")).not.toBeInTheDocument();
+    expect(screen.queryByText("Done task")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /^Past/ }));
-    expect(screen.getByText("Past task")).toBeInTheDocument();
-    expect(screen.queryByText("Today task")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Complete/ }));
+    expect(screen.getByText("Done task")).toBeInTheDocument();
     expect(screen.queryByText("Future task")).not.toBeInTheDocument();
+    expect(screen.queryByText("Overdue task")).not.toBeInTheDocument();
   });
 
-  it("puts completed tasks in Past, and counts everything due today (done or not) in Today", async () => {
+  it("treats tasks with no due date as Upcoming and keeps completed tasks out of Overdue", async () => {
     mockData([
-      makeTodo({ id: "done-future", title: "Done future", due_date: "2099-01-01", is_done: true }),
-      makeTodo({ id: "done-today", title: "Done today", due_date: TODAY, is_done: true }),
+      makeTodo({ id: "nodue", title: "No due date", due_date: null, is_done: false }),
+      makeTodo({ id: "done-overdue", title: "Done overdue", due_date: "2020-01-01", is_done: true }),
     ]);
     render(<TodoListPage />);
-    await waitFor(() => expect(screen.getByText("Done future")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("No due date")).toBeInTheDocument());
 
-    // Today: a completed task due today still shows; a completed future task does not.
-    fireEvent.click(screen.getByRole("button", { name: /^Today/ }));
-    expect(screen.getByText("Done today")).toBeInTheDocument();
-    expect(screen.queryByText("Done future")).not.toBeInTheDocument();
+    // A task with no due date stays in Upcoming.
+    expect(screen.getByRole("button", { name: /^Upcoming/ })).toHaveAttribute("aria-pressed", "true");
 
-    // Past: all completed tasks show, regardless of their due date.
-    fireEvent.click(screen.getByRole("button", { name: /^Past/ }));
-    expect(screen.getByText("Done future")).toBeInTheDocument();
-    expect(screen.getByText("Done today")).toBeInTheDocument();
+    // Overdue excludes completed tasks even with a past due date.
+    fireEvent.click(screen.getByRole("button", { name: /^Overdue/ }));
+    expect(screen.queryByText("Done overdue")).not.toBeInTheDocument();
+
+    // Complete contains the completed task.
+    fireEvent.click(screen.getByRole("button", { name: /^Complete/ }));
+    expect(screen.getByText("Done overdue")).toBeInTheDocument();
   });
 
   it("opens on the section from the URL when returning from a task detail", async () => {
-    window.history.pushState({}, "", "/todo-list?section=past");
+    window.history.pushState({}, "", "/todo-list?section=overdue");
     mockData([
-      makeTodo({ id: "past", title: "Past task", due_date: "2020-01-01", is_done: false }),
+      makeTodo({ id: "overdue", title: "Overdue task", due_date: "2020-01-01", is_done: false }),
       makeTodo({ id: "future", title: "Future task", due_date: "2099-01-01", is_done: false }),
     ]);
     render(<TodoListPage />);
 
-    await waitFor(() => expect(screen.getByText("Past task")).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: /Completed tasks and anything overdue/ })).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(screen.getByText("Overdue task")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /Open tasks past their due date/ })).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByText("Future task")).not.toBeInTheDocument();
   });
 
   it("highlights overdue (not done) rows", async () => {
     mockData([makeTodo({ id: "t-overdue", due_date: "2020-01-01", is_done: false })]);
     render(<TodoListPage />);
-    await waitFor(() => expect(screen.getByRole("button", { name: /^Past/ })).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /^Past/ }));
-    await waitFor(() => {
-      expect(screen.getByText("Overdue")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Overdue/ })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^Overdue/ }));
+    const row = await waitFor(() => {
+      const r = screen.getByText("Call back the lead").closest("tr");
+      expect(r).not.toBeNull();
+      return r;
     });
-    const row = screen.getByText("Call back the lead").closest("tr");
     expect(row).toHaveAttribute("data-backlogged", "true");
   });
 
   it("uses a muted red treatment for overdue rows and header count", async () => {
     mockData([makeTodo({ id: "t-overdue", due_date: "2020-01-01", is_done: false })]);
     render(<TodoListPage />);
-    await waitFor(() => expect(screen.getByRole("button", { name: /^Past/ })).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /^Past/ }));
-    await waitFor(() => expect(screen.getByText("Overdue")).toBeInTheDocument());
-
-    const row = screen.getByText("Call back the lead").closest("tr");
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Overdue/ })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^Overdue/ }));
+    const row = await waitFor(() => {
+      const r = screen.getByText("Call back the lead").closest("tr");
+      expect(r).not.toBeNull();
+      return r;
+    });
     expect(row?.className).toContain("bg-rose");
     expect(row?.className).not.toContain("bg-destructive");
 
@@ -161,11 +162,16 @@ describe("TodoListPage", () => {
   it("does not highlight completed overdue tasks", async () => {
     mockData([makeTodo({ due_date: "2020-01-01", is_done: true })]);
     render(<TodoListPage />);
-    await waitFor(() => expect(screen.getByText("Call back the lead")).toBeInTheDocument());
-    expect(screen.queryByText("Overdue")).not.toBeInTheDocument();
+    fireEvent.click(await waitFor(() => screen.getByRole("button", { name: /^Complete/ })));
+    const row = await waitFor(() => {
+      const r = screen.getByText("Call back the lead").closest("tr");
+      expect(r).not.toBeNull();
+      return r;
+    });
+    expect(row).not.toHaveAttribute("data-backlogged", "true");
   });
 
-  it("sorts unfinished tasks before finished tasks, with earliest due dates first in each group", async () => {
+  it("sorts tasks by earliest due date first within each section", async () => {
     mockData([
       makeTodo({ id: "done-early", title: "Done early", due_date: "2099-01-01", is_done: true }),
       makeTodo({ id: "open-late", title: "Open late", due_date: "2099-03-01", is_done: false }),
@@ -175,16 +181,24 @@ describe("TodoListPage", () => {
 
     render(<TodoListPage />);
 
+    // Upcoming (default): open tasks ordered by earliest due date.
     await waitFor(() => expect(screen.getByText("Open early")).toBeInTheDocument());
-    const titles = screen
+    const upcoming = screen
       .getAllByRole("link")
       .map((row) => row.textContent || "")
-      .filter((text) => text.includes("Open") || text.includes("Done"));
+      .filter((text) => text.includes("Open"));
+    expect(upcoming[0]).toContain("Open early");
+    expect(upcoming[1]).toContain("Open late");
 
-    expect(titles[0]).toContain("Open early");
-    expect(titles[1]).toContain("Open late");
-    expect(titles[2]).toContain("Done early");
-    expect(titles[3]).toContain("Done late");
+    // Complete: done tasks ordered by earliest due date.
+    fireEvent.click(screen.getByRole("button", { name: /^Complete/ }));
+    await waitFor(() => expect(screen.getByText("Done early")).toBeInTheDocument());
+    const complete = screen
+      .getAllByRole("link")
+      .map((row) => row.textContent || "")
+      .filter((text) => text.includes("Done"));
+    expect(complete[0]).toContain("Done early");
+    expect(complete[1]).toContain("Done late");
   });
 
   it("offers a person filter available to everyone", async () => {

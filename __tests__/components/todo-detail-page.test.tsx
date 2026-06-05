@@ -54,12 +54,12 @@ describe("TodoDetailPage", () => {
   });
 
   it("links back to the originating to-do section when provided", async () => {
-    window.history.pushState({}, "", "/todo-list/test-id?section=past");
+    window.history.pushState({}, "", "/todo-list/test-id?section=overdue");
     mockTodo(makeTodo({}));
     render(<TodoDetailPage />);
 
     const backLink = await screen.findByRole("link", { name: /Back to To-Do List/ });
-    expect(backLink).toHaveAttribute("href", "/todo-list?section=past");
+    expect(backLink).toHaveAttribute("href", "/todo-list?section=overdue");
   });
 
   it("shows editable fields and delete controls for the assigner", async () => {

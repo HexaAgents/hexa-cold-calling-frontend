@@ -74,6 +74,6 @@ describe("TodoListPage", () => {
     expect(row).toHaveAttribute("role", "link");
 
     fireEvent.click(row!);
-    expect(mockPush).toHaveBeenCalledWith("/todo-list/task-1?section=all");
+    expect(mockPush).toHaveBeenCalledWith("/todo-list/task-1?section=upcoming");
   });
 });

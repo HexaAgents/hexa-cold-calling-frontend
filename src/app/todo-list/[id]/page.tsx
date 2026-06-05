@@ -18,7 +18,7 @@ const AUTOSAVE_INTERVAL_MS = 30_000;
 function todoListBackHref(): string {
   if (typeof window === "undefined") return "/todo-list";
   const section = new URLSearchParams(window.location.search).get("section");
-  return section === "past" || section === "today" ? `/todo-list?section=${section}` : "/todo-list";
+  return section === "overdue" || section === "complete" ? `/todo-list?section=${section}` : "/todo-list";
 }
 
 function todayStr(): string {

@@ -27,11 +27,11 @@ import { getPersonPillClasses, getPersonDotClasses } from "@/lib/todo-colors";
 import { ListTodo, Plus, Trash2, AlertTriangle, X, CalendarDays, Filter, Check } from "lucide-react";
 import type { Todo, TodoAssignee, User } from "@/types";
 
-type TodoSection = "all" | "today" | "past";
-const TODO_SECTIONS: TodoSection[] = ["all", "today", "past"];
+type TodoSection = "upcoming" | "overdue" | "complete";
+const TODO_SECTIONS: TodoSection[] = ["upcoming", "overdue", "complete"];
 
 function parseTodoSection(value: string | null): TodoSection {
-  return value === "past" || value === "today" ? value : "all";
+  return value === "overdue" || value === "complete" ? value : "upcoming";
 }
 
 function todayStr(): string {
@@ -50,15 +50,15 @@ function isBacklogged(todo: Todo): boolean {
 }
 
 // Section predicates.
-// Today: everything due today, completed or not.
-// Past: every completed task plus anything overdue from a past due date.
-// All: literally everything (no filtering), including today and past.
-function isDueToday(todo: Todo): boolean {
-  return todo.due_date === todayStr();
+// Overdue: open tasks whose due date is in the past.
+// Complete: tasks that have been marked done.
+// Upcoming: everything else (open tasks that are not overdue).
+function isComplete(todo: Todo): boolean {
+  return todo.is_done;
 }
 
-function isPast(todo: Todo): boolean {
-  return todo.is_done || (!!todo.due_date && todo.due_date < todayStr());
+function isUpcoming(todo: Todo): boolean {
+  return !todo.is_done && !isBacklogged(todo);
 }
 
 function sortTodos(todos: Todo[]): Todo[] {
@@ -107,20 +107,20 @@ function AssigneePills({ todo }: { todo: Todo }) {
 }
 
 const SECTION_META: Record<TodoSection, { label: string; description: string; emptyText: string }> = {
-  all: {
-    label: "All",
-    description: "Every task — today, past, upcoming, and completed",
+  upcoming: {
+    label: "Upcoming",
+    description: "Open tasks that aren't overdue or completed",
     emptyText: "Create a task and assign it to someone on the team.",
   },
-  today: {
-    label: "Today",
-    description: "Everything due today, done or not",
-    emptyText: "Nothing is due today.",
+  overdue: {
+    label: "Overdue",
+    description: "Open tasks past their due date",
+    emptyText: "Nothing is overdue.",
   },
-  past: {
-    label: "Past",
-    description: "Completed tasks and anything overdue",
-    emptyText: "No completed or overdue tasks yet.",
+  complete: {
+    label: "Complete",
+    description: "Tasks that have been marked done",
+    emptyText: "No completed tasks yet.",
   },
 };
 
@@ -195,7 +195,7 @@ function TodoListContent({ user }: { user: User }) {
   const [assignees, setAssignees] = useState<TodoAssignee[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
-  const [section, setSection] = useState<TodoSection>("all");
+  const [section, setSection] = useState<TodoSection>("upcoming");
   const [showCreate, setShowCreate] = useState(false);
 
   useEffect(() => {
@@ -234,20 +234,20 @@ function TodoListContent({ user }: { user: User }) {
 
   const sectionCounts = useMemo(
     () => ({
-      all: personFiltered.length,
-      today: personFiltered.filter(isDueToday).length,
-      past: personFiltered.filter(isPast).length,
+      upcoming: personFiltered.filter(isUpcoming).length,
+      overdue: personFiltered.filter(isBacklogged).length,
+      complete: personFiltered.filter(isComplete).length,
     }),
     [personFiltered],
   );
 
-  // Past shows a red accent only when it actually contains overdue work.
-  const pastOverdueCount = useMemo(() => personFiltered.filter(isBacklogged).length, [personFiltered]);
+  // The Overdue tab shows a red accent only when it actually contains work.
+  const overdueCount = useMemo(() => personFiltered.filter(isBacklogged).length, [personFiltered]);
 
   const filtered = useMemo(() => {
-    if (section === "past") return personFiltered.filter(isPast);
-    if (section === "today") return personFiltered.filter(isDueToday);
-    return personFiltered;
+    if (section === "overdue") return personFiltered.filter(isBacklogged);
+    if (section === "complete") return personFiltered.filter(isComplete);
+    return personFiltered.filter(isUpcoming);
   }, [personFiltered, section]);
 
   const openCount = useMemo(() => filtered.filter((t) => !t.is_done).length, [filtered]);
@@ -353,7 +353,7 @@ function TodoListContent({ user }: { user: User }) {
                 <span className="font-semibold">{SECTION_META[key].label}</span>
                 <span
                   className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                    key === "past" && pastOverdueCount > 0
+                    key === "overdue" && overdueCount > 0
                       ? "bg-rose-500/10 text-rose-600 dark:text-rose-300"
                       : "bg-muted text-muted-foreground"
                   }`}
@@ -375,7 +375,7 @@ function TodoListContent({ user }: { user: User }) {
             <ListTodo size={24} />
           </div>
           <h3 className="text-sm font-semibold">
-            {section === "all" ? "No tasks yet" : `No ${SECTION_META[section].label.toLowerCase()} tasks`}
+            {section === "upcoming" ? "No tasks yet" : `No ${SECTION_META[section].label.toLowerCase()} tasks`}
           </h3>
           <p className="mt-1 max-w-md text-sm text-muted-foreground">
             {filter === "all"
