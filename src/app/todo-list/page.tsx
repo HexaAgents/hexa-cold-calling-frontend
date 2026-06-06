@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import AuthGuard from "@/components/layout/auth-guard";
 import AppSidebar from "@/components/layout/app-sidebar";
@@ -22,9 +22,15 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuCheckboxItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { assigneePayload, getTodoAssignees, isTodoAssignedTo } from "@/lib/todo-assignees";
 import { getPersonPillClasses, getPersonDotClasses } from "@/lib/todo-colors";
-import { ListTodo, Plus, Trash2, AlertTriangle, X, CalendarDays, Filter, Check } from "lucide-react";
+import { ListTodo, Plus, Trash2, AlertTriangle, X, CalendarDays, Filter, Check, Pencil, ChevronDown } from "lucide-react";
 import type { Todo, TodoAssignee, User } from "@/types";
 
 type TodoSection = "upcoming" | "overdue" | "complete";
@@ -103,6 +109,175 @@ function AssigneePills({ todo }: { todo: Todo }) {
         <PersonPill key={assignee.id} name={assignee.first_name} />
       ))}
     </div>
+  );
+}
+
+function InlineTitleEditor({
+  todo,
+  canManage,
+  backlogged,
+  onSave,
+}: {
+  todo: Todo;
+  canManage: boolean;
+  backlogged: boolean;
+  onSave: (todoId: string, title: string) => Promise<void> | void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(todo.title);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const commit = () => {
+    setEditing(false);
+    const next = draft.trim();
+    if (next && next !== todo.title) {
+      void onSave(todo.id, next);
+    } else {
+      setDraft(todo.title);
+    }
+  };
+
+  if (editing) {
+    return (
+      <Input
+        ref={inputRef}
+        value={draft}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            setDraft(todo.title);
+            setEditing(false);
+          }
+        }}
+        className="h-8 py-1 text-sm font-medium"
+      />
+    );
+  }
+
+  return (
+    <div className="flex items-start gap-2">
+      <span
+        className={`font-medium transition-colors group-hover:text-primary ${
+          todo.is_done ? "text-muted-foreground line-through" : ""
+        }`}
+      >
+        {todo.title}
+      </span>
+      {backlogged && (
+        <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full border border-rose-300/30 bg-rose-500/8 px-2 py-0.5 text-[10px] font-medium text-rose-600/90 ring-1 ring-inset ring-rose-400/10 dark:text-rose-300/90">
+          <AlertTriangle size={10} /> Overdue
+        </span>
+      )}
+      {canManage && (
+        <button
+          type="button"
+          aria-label={`Edit "${todo.title}"`}
+          title="Edit task"
+          onClick={(e) => {
+            e.stopPropagation();
+            setDraft(todo.title);
+            setEditing(true);
+          }}
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border/70 bg-background/60 text-muted-foreground opacity-0 transition-all hover:border-primary/40 hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+        >
+          <Pencil size={12} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function InlineAssigneeEditor({
+  todo,
+  assignees,
+  canManage,
+  onSave,
+}: {
+  todo: Todo;
+  assignees: TodoAssignee[];
+  canManage: boolean;
+  onSave: (todoId: string, ids: string[]) => Promise<void> | void;
+}) {
+  const [open, setOpen] = useState(false);
+  const currentIds = useMemo(() => getTodoAssignees(todo).map((a) => a.id), [todo]);
+  const [draftIds, setDraftIds] = useState<string[]>(currentIds);
+
+  useEffect(() => {
+    if (!open) setDraftIds(currentIds);
+  }, [open, currentIds]);
+
+  if (!canManage) {
+    return <AssigneePills todo={todo} />;
+  }
+
+  const toggle = (id: string) => {
+    setDraftIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
+  };
+
+  const sameSelection = (a: string[], b: string[]) =>
+    a.length === b.length && a.every((id) => b.includes(id));
+
+  return (
+    <DropdownMenu
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next && !sameSelection(draftIds, currentIds)) {
+          void onSave(todo.id, draftIds);
+        }
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Edit assignees"
+          onClick={(e) => e.stopPropagation()}
+          className="-my-1 flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:outline-none"
+        >
+          <span className="min-w-0 flex-1">
+            <AssigneePills todo={todo} />
+          </span>
+          <ChevronDown size={13} className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="w-52"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {assignees.length === 0 ? (
+          <p className="px-2 py-1.5 text-sm text-muted-foreground">No assignable users.</p>
+        ) : (
+          assignees.map((assignee) => (
+            <DropdownMenuCheckboxItem
+              key={assignee.id}
+              checked={draftIds.includes(assignee.id)}
+              onSelect={(e) => e.preventDefault()}
+              onCheckedChange={() => toggle(assignee.id)}
+            >
+              <span className="flex items-center gap-2">
+                <span className={`h-2 w-2 rounded-full ${getPersonDotClasses(assignee.first_name)}`} />
+                {assignee.first_name}
+              </span>
+            </DropdownMenuCheckboxItem>
+          ))
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -276,6 +451,30 @@ function TodoListContent({ user }: { user: User }) {
     }
   };
 
+  const handleSaveTitle = async (todoId: string, title: string) => {
+    try {
+      const updated = await apiFetch<Todo>(`/todos/${todoId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title }),
+      });
+      setTodos((prev) => sortTodos(prev.map((t) => (t.id === todoId ? updated : t))));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSaveAssignees = async (todoId: string, ids: string[]) => {
+    try {
+      const updated = await apiFetch<Todo>(`/todos/${todoId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ assignees: assigneePayload(ids, assignees) }),
+      });
+      setTodos((prev) => sortTodos(prev.map((t) => (t.id === todoId ? updated : t))));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
@@ -392,8 +591,8 @@ function TodoListContent({ user }: { user: User }) {
             <TableHeader>
               <TableRow className="border-b border-border bg-muted/40 hover:bg-muted/40">
                 <TableHead className="w-12" />
-                <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Task</TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assigned to</TableHead>
+                <TableHead className="w-[42%] text-xs font-semibold uppercase tracking-wide text-muted-foreground">Task</TableHead>
+                <TableHead className="w-[21%] text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assigned to</TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assigned by</TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Due date</TableHead>
                 <TableHead className="w-12" />
@@ -434,24 +633,21 @@ function TodoListContent({ user }: { user: User }) {
                         className="h-[18px] w-[18px] cursor-pointer rounded-md accent-primary transition disabled:cursor-not-allowed disabled:opacity-40"
                       />
                     </TableCell>
-                    <TableCell className="max-w-xs">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`font-medium transition-colors group-hover:text-primary ${
-                            todo.is_done ? "text-muted-foreground line-through" : ""
-                          }`}
-                        >
-                          {todo.title}
-                        </span>
-                        {backlogged && (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-rose-300/30 bg-rose-500/8 px-2 py-0.5 text-[10px] font-medium text-rose-600/90 ring-1 ring-inset ring-rose-400/10 dark:text-rose-300/90">
-                            <AlertTriangle size={10} /> Overdue
-                          </span>
-                        )}
-                      </div>
+                    <TableCell className="w-[42%] whitespace-normal break-words align-top">
+                      <InlineTitleEditor
+                        todo={todo}
+                        canManage={canManage}
+                        backlogged={backlogged}
+                        onSave={handleSaveTitle}
+                      />
                     </TableCell>
-                    <TableCell>
-                      <AssigneePills todo={todo} />
+                    <TableCell className="w-[21%] align-top">
+                      <InlineAssigneeEditor
+                        todo={todo}
+                        assignees={assignees}
+                        canManage={canManage}
+                        onSave={handleSaveAssignees}
+                      />
                     </TableCell>
                     <TableCell>
                       <PersonPill name={todo.assigned_by_name} />
