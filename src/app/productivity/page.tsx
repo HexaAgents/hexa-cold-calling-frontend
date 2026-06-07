@@ -30,8 +30,13 @@ import {
   ArrowRight,
   Users,
   TrendingUp,
+  Clock,
 } from "lucide-react";
-import type { ProductivityResponse, OutcomeBreakdown } from "@/types";
+import type {
+  ProductivityResponse,
+  OutcomeBreakdown,
+  BestCallTimesResponse,
+} from "@/types";
 
 export default function ProductivityPage() {
   return (
@@ -101,14 +106,19 @@ function OutcomeBar({ breakdown }: { breakdown: OutcomeBreakdown }) {
 
 function ProductivityContent() {
   const [data, setData] = useState<ProductivityResponse | null>(null);
+  const [bestTimes, setBestTimes] = useState<BestCallTimesResponse | null>(null);
   const [days, setDays] = useState("30");
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const resp = await apiFetch<ProductivityResponse>(`/productivity?days=${days}`);
+      const [resp, times] = await Promise.all([
+        apiFetch<ProductivityResponse>(`/productivity?days=${days}`),
+        apiFetch<BestCallTimesResponse>(`/productivity/best-call-times?days=${days}`),
+      ]);
       setData(resp);
+      setBestTimes(times);
     } catch (err) {
       console.error("Failed to fetch productivity:", err);
     } finally {
@@ -229,6 +239,11 @@ function ProductivityContent() {
             <OutcomeBar breakdown={overall} />
           </div>
         </section>
+      )}
+
+      {/* Best time to call */}
+      {bestTimes && bestTimes.total_calls > 0 && (
+        <BestTimeToCall data={bestTimes} />
       )}
 
       {/* Per-user breakdown */}
@@ -355,6 +370,211 @@ function SummaryCard({
         {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
       </div>
     </div>
+  );
+}
+
+const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function formatHour(h: number) {
+  const period = h < 12 ? "am" : "pm";
+  const hr = h % 12 === 0 ? 12 : h % 12;
+  return `${hr}${period}`;
+}
+
+function formatHourRange(h: number) {
+  return `${formatHour(h)}–${formatHour((h + 1) % 24)}`;
+}
+
+function BestTimeToCall({ data }: { data: BestCallTimesResponse }) {
+  const { hours, heatmap, best_hour, best_window, min_sample, total_calls, overall_pickup_rate } = data;
+
+  // Restrict both views to the active hour range so the charts stay compact.
+  const activeHours = hours.filter((h) => h.total > 0).map((h) => h.hour);
+  const minHour = activeHours.length ? Math.min(...activeHours) : 0;
+  const maxHour = activeHours.length ? Math.max(...activeHours) : 23;
+  const hourRange: number[] = [];
+  for (let h = minHour; h <= maxHour; h++) hourRange.push(h);
+
+  const hourByKey = new Map(hours.map((h) => [h.hour, h]));
+  const maxPickupRate = Math.max(0.0001, ...hours.map((h) => h.pickup_rate));
+
+  // Heatmap lookup + scaling.
+  const cellByKey = new Map(heatmap.map((c) => [`${c.weekday}-${c.hour}`, c]));
+  const maxCellRate = Math.max(0.0001, ...heatmap.filter((c) => c.total >= min_sample).map((c) => c.pickup_rate));
+
+  return (
+    <section className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border bg-muted/30">
+        <Clock size={15} className="text-muted-foreground" />
+        <h2 className="text-sm font-semibold">Best Time to Call</h2>
+        <span className="ml-auto text-xs text-muted-foreground">
+          San Francisco time (PT) · {total_calls.toLocaleString()} calls
+        </span>
+      </div>
+
+      <div className="p-4 space-y-4">
+        {/* Best-window callouts */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-md border border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20 px-3 py-2">
+            <p className="text-[11px] font-medium text-muted-foreground">Best hour</p>
+            {best_hour ? (
+              <p className="text-base font-bold tabular-nums leading-tight">
+                {formatHourRange(best_hour.hour)}{" "}
+                <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                  {Math.round(best_hour.pickup_rate * 100)}%
+                </span>
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Not enough data</p>
+            )}
+          </div>
+          <div className="rounded-md border border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20 px-3 py-2">
+            <p className="text-[11px] font-medium text-muted-foreground">Best day + hour</p>
+            {best_window ? (
+              <p className="text-base font-bold tabular-nums leading-tight">
+                {WEEKDAY_LABELS[best_window.weekday]} {formatHourRange(best_window.hour)}{" "}
+                <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                  {Math.round(best_window.pickup_rate * 100)}%
+                </span>
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Not enough data</p>
+            )}
+          </div>
+          <div className="rounded-md border border-border bg-card px-3 py-2">
+            <p className="text-[11px] font-medium text-muted-foreground">Overall pickup</p>
+            <p className="text-base font-bold tabular-nums leading-tight">{Math.round(overall_pickup_rate * 100)}%</p>
+          </div>
+        </div>
+
+        {/* Hour-of-day bar chart */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Pickup rate by hour
+            </h3>
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-sm bg-emerald-400/60" /> Picked up
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-sm bg-emerald-500" /> Interested
+              </span>
+            </div>
+          </div>
+          <div className="flex items-end gap-1.5 h-24">
+            {hourRange.map((h) => {
+              const bucket = hourByKey.get(h);
+              const total = bucket?.total ?? 0;
+              const pickupRate = bucket?.pickup_rate ?? 0;
+              const interestedRate = bucket?.interested_rate ?? 0;
+              const lowSample = total > 0 && total < min_sample;
+              const barHeightPct = (pickupRate / maxPickupRate) * 100;
+              const interestedPortion = pickupRate > 0 ? (interestedRate / pickupRate) * 100 : 0;
+              return (
+                <div key={h} className="flex flex-1 flex-col items-center gap-1 min-w-0">
+                  <span className="text-[10px] font-medium tabular-nums text-foreground/80">
+                    {total > 0 ? `${Math.round(pickupRate * 100)}%` : ""}
+                  </span>
+                  <div className="relative flex w-full flex-1 items-end">
+                    <div
+                      className={`w-full overflow-hidden rounded-t-sm bg-emerald-400/60 transition-all ${
+                        lowSample ? "opacity-40" : ""
+                      }`}
+                      style={{ height: `${Math.max(barHeightPct, total > 0 ? 2 : 0)}%` }}
+                      title={
+                        total > 0
+                          ? `${formatHourRange(h)} · ${total} calls · ${Math.round(
+                              pickupRate * 100,
+                            )}% pickup · ${Math.round(interestedRate * 100)}% interested`
+                          : `${formatHourRange(h)} · no calls`
+                      }
+                    >
+                      <div
+                        className="absolute bottom-0 w-full bg-emerald-500"
+                        style={{ height: `${interestedPortion}%` }}
+                      />
+                    </div>
+                  </div>
+                  <span className="text-[9px] tabular-nums text-muted-foreground leading-none">{formatHour(h)}</span>
+                  <span className="text-[8px] tabular-nums text-muted-foreground/60 leading-none">{total || ""}</span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 text-[10px] text-muted-foreground/70">
+            Bottom number = call volume. Faded bars have &lt;{min_sample} calls (excluded from picks).
+          </p>
+        </div>
+
+        {/* Weekday x hour heatmap */}
+        <div>
+          <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Pickup rate by day &amp; hour
+          </h3>
+          <div className="overflow-x-auto">
+            <div className="inline-block min-w-full">
+              {/* Hour header */}
+              <div className="flex">
+                <div className="w-10 flex-shrink-0" />
+                {hourRange.map((h) => (
+                  <div
+                    key={h}
+                    className="flex-1 min-w-[26px] text-center text-[9px] tabular-nums text-muted-foreground"
+                  >
+                    {formatHour(h)}
+                  </div>
+                ))}
+              </div>
+              {WEEKDAY_LABELS.map((label, weekday) => (
+                <div key={weekday} className="flex items-center">
+                  <div className="w-10 flex-shrink-0 text-[10px] font-medium text-muted-foreground">{label}</div>
+                  {hourRange.map((h) => {
+                    const cell = cellByKey.get(`${weekday}-${h}`);
+                    const total = cell?.total ?? 0;
+                    const rate = cell?.pickup_rate ?? 0;
+                    const lowSample = total > 0 && total < min_sample;
+                    const intensity = total >= min_sample ? Math.min(1, rate / maxCellRate) : 0;
+                    const isBest =
+                      best_window && best_window.weekday === weekday && best_window.hour === h;
+                    return (
+                      <div key={h} className="flex-1 min-w-[22px] p-[1.5px]">
+                        <div
+                          className={`h-4 w-full rounded-sm border ${
+                            isBest ? "border-emerald-500 ring-1 ring-emerald-500" : "border-transparent"
+                          } ${total === 0 ? "bg-muted/40" : lowSample ? "bg-emerald-400/10" : ""}`}
+                          style={
+                            total >= min_sample
+                              ? { backgroundColor: `rgb(16 185 129 / ${0.12 + intensity * 0.78})` }
+                              : undefined
+                          }
+                          title={
+                            total > 0
+                              ? `${label} ${formatHourRange(h)} · ${total} calls · ${Math.round(
+                                  rate * 100,
+                                )}% pickup`
+                              : `${label} ${formatHourRange(h)} · no calls`
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
+            <span>Lower</span>
+            <div className="flex h-2.5 w-28 overflow-hidden rounded-full">
+              {[0.12, 0.3, 0.5, 0.7, 0.9].map((a) => (
+                <div key={a} className="flex-1" style={{ backgroundColor: `rgb(16 185 129 / ${a})` }} />
+              ))}
+            </div>
+            <span>Higher pickup rate</span>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 

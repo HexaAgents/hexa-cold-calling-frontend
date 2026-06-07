@@ -152,6 +152,41 @@ export interface ProductivityResponse {
   per_user_breakdown: UserOutcomeBreakdown[];
 }
 
+export interface HourBucket {
+  hour: number;
+  total: number;
+  pickups: number;
+  interested: number;
+  pickup_rate: number;
+  interested_rate: number;
+}
+
+export interface HeatCell {
+  weekday: number;
+  hour: number;
+  total: number;
+  pickups: number;
+  pickup_rate: number;
+}
+
+export interface BestWindow {
+  weekday: number;
+  hour: number;
+  total: number;
+  pickup_rate: number;
+}
+
+export interface BestCallTimesResponse {
+  timezone: string;
+  min_sample: number;
+  total_calls: number;
+  overall_pickup_rate: number;
+  hours: HourBucket[];
+  heatmap: HeatCell[];
+  best_hour: HourBucket | null;
+  best_window: BestWindow | null;
+}
+
 export interface TrackedContact {
   contact_id: string;
   first_name: string | null;
