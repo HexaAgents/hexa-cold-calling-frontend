@@ -111,6 +111,7 @@ export interface ImportBatch {
   enrichment_error: string | null;
   status: string;
   has_filtered_csv: boolean;
+  has_discarded_csv: boolean;
   created_at: string | null;
 }
 

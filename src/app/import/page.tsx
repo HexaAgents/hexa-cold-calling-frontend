@@ -97,6 +97,7 @@ function ImportContent() {
           enrichment_error: null,
           status: "processing",
           has_filtered_csv: false,
+          has_discarded_csv: false,
           created_at: new Date().toISOString(),
         },
         ...prev,
@@ -123,6 +124,8 @@ function ImportContent() {
       </p>
 
       <EnrichmentHealthBanner />
+
+      <RefeedBanner />
 
       <div
         onDragOver={(e) => {
@@ -187,7 +190,7 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
   const isFailed = batch.status === "failed";
   const isProcessing = batch.status === "processing";
   const enriched = batch.enriched_rows ?? 0;
-  const [downloading, setDownloading] = useState(false);
+  const [downloadingKind, setDownloadingKind] = useState<"filtered" | "discarded" | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const fillClass = isFailed
@@ -196,18 +199,19 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
     ? "progress-fill-complete"
     : "progress-fill";
 
-  const handleDownload = async () => {
+  const handleDownload = async (kind: "filtered" | "discarded") => {
     setDownloadError(null);
-    setDownloading(true);
+    setDownloadingKind(kind);
     try {
-      const suggested = batch.filename.toLowerCase().endsWith(".csv")
-        ? `${batch.filename.slice(0, -4)}.filtered.csv`
-        : `${batch.filename}.filtered.csv`;
-      await apiDownload(`/imports/${batch.id}/filtered-csv`, suggested);
+      const base = batch.filename.toLowerCase().endsWith(".csv")
+        ? batch.filename.slice(0, -4)
+        : batch.filename;
+      const suggested = `${base}.${kind}.csv`;
+      await apiDownload(`/imports/${batch.id}/${kind}-csv`, suggested);
     } catch (err) {
       setDownloadError(err instanceof Error ? err.message : "Download failed");
     } finally {
-      setDownloading(false);
+      setDownloadingKind(null);
     }
   };
 
@@ -240,16 +244,33 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
               size="sm"
               variant="ghost"
               className="h-6 px-2 text-xs"
-              onClick={handleDownload}
-              disabled={downloading}
+              onClick={() => handleDownload("filtered")}
+              disabled={downloadingKind !== null}
               title="Download the original CSV with only the contacts that passed scoring"
             >
-              {downloading ? (
+              {downloadingKind === "filtered" ? (
                 <Loader2 size={11} className="mr-1 animate-spin" />
               ) : (
                 <Download size={11} className="mr-1" />
               )}
               Filtered CSV
+            </Button>
+          )}
+          {batch.has_discarded_csv && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-xs"
+              onClick={() => handleDownload("discarded")}
+              disabled={downloadingKind !== null}
+              title="Download the original CSV with only the contacts that were rejected or scored zero"
+            >
+              {downloadingKind === "discarded" ? (
+                <Loader2 size={11} className="mr-1 animate-spin" />
+              ) : (
+                <Download size={11} className="mr-1" />
+              )}
+              Discarded CSV
             </Button>
           )}
         </div>
@@ -303,6 +324,68 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
           <span>{downloadError}</span>
         </div>
       )}
+    </div>
+  );
+}
+
+function RefeedBanner() {
+  const [refeeding, setRefeeding] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleRefeed = async () => {
+    setError(null);
+    setMessage(null);
+    setRefeeding(true);
+    try {
+      const res = await apiFetch<{ status: string; reactivated: number }>(
+        "/apollo/reactivate-stale",
+        { method: "POST" }
+      );
+      setMessage(
+        res.reactivated > 0
+          ? `Refed ${res.reactivated} contact${res.reactivated === 1 ? "" : "s"} back into the call pool — re-enriching in the background.`
+          : "No eligible contacts to refeed right now."
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to refeed contacts");
+    } finally {
+      setRefeeding(false);
+    }
+  };
+
+  return (
+    <div className="mb-6 border border-border bg-card p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-2 flex-1">
+          <RefreshCw size={16} className="text-muted-foreground mt-0.5 shrink-0" />
+          <div className="space-y-1 text-sm">
+            <p className="font-medium">Refeed stale &quot;didn&apos;t pick up&quot; contacts</p>
+            <p className="text-xs text-muted-foreground max-w-xl">
+              Puts contacts that didn&apos;t pick up after 2+ call occasions, with their last
+              attempt over a week ago, back into the shared call pool for anyone to call. Their
+              Apollo numbers are refreshed in the background so new numbers replace the old ones.
+              Contacts are not re-scored.
+            </p>
+            {message && (
+              <p className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 mt-1">
+                <CheckCircle2 size={12} className="shrink-0" /> {message}
+              </p>
+            )}
+            {error && <p className="text-xs text-destructive mt-1">{error}</p>}
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefeed}
+          disabled={refeeding}
+          className="shrink-0"
+        >
+          <RefreshCw size={14} className={`mr-1 ${refeeding ? "animate-spin" : ""}`} />
+          {refeeding ? "Refeeding..." : "Refeed"}
+        </Button>
+      </div>
     </div>
   );
 }

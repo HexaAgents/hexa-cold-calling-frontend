@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { CheckCircle, Lock, Mail, Unlink, MessageSquare, Phone, RotateCcw, ChevronDown, Palette, Sun, Moon } from "lucide-react";
+import { CheckCircle, Lock, Mail, Unlink, MessageSquare, Phone, RotateCcw, ChevronDown, Palette, Sun, Moon, RefreshCw } from "lucide-react";
 import { useTheme } from "@/lib/theme";
 import type { Settings } from "@/types";
 
@@ -109,6 +109,10 @@ function SettingsContent() {
   const [gmailAddress, setGmailAddress] = useState<string | null>(null);
   const [gmailLoading, setGmailLoading] = useState(true);
 
+  const [refeeding, setRefeeding] = useState(false);
+  const [refeedMessage, setRefeedMessage] = useState<string | null>(null);
+  const [refeedError, setRefeedError] = useState<string | null>(null);
+
   useEffect(() => {
     apiFetch<Settings>("/settings")
       .then((s) => {
@@ -205,6 +209,27 @@ function SettingsContent() {
     }
   };
 
+  const handleRefeed = async () => {
+    setRefeedError(null);
+    setRefeedMessage(null);
+    setRefeeding(true);
+    try {
+      const res = await apiFetch<{ status: string; reactivated: number }>(
+        "/apollo/reactivate-stale",
+        { method: "POST" }
+      );
+      setRefeedMessage(
+        res.reactivated > 0
+          ? `Refed ${res.reactivated} contact${res.reactivated === 1 ? "" : "s"} back into the call pool. Re-enrichment is running in the background.`
+          : "No eligible contacts to refeed right now."
+      );
+    } catch (err) {
+      setRefeedError(err instanceof Error ? err.message : "Failed to refeed contacts");
+    } finally {
+      setRefeeding(false);
+    }
+  };
+
   const emailSubjectDPURef = useRef<HTMLInputElement>(null);
   const emailBodyDPURef = useRef<HTMLTextAreaElement>(null);
   const emailSubjectIntRef = useRef<HTMLInputElement>(null);
@@ -252,6 +277,7 @@ function SettingsContent() {
     { id: "gmail", label: "Gmail" },
     { id: "templates", label: "Email Templates" },
     { id: "security", label: "Security" },
+    { id: "refeed", label: "Refeed" },
   ];
 
   return (
@@ -546,6 +572,41 @@ function SettingsContent() {
                 <span className="flex items-center gap-1 text-sm text-green-600 animate-in fade-in duration-200">
                   <CheckCircle size={13} /> Password updated
                 </span>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Refeed */}
+        <section id="refeed" className="rounded-lg border border-border bg-card overflow-hidden scroll-mt-6">
+          <div className="flex items-center gap-2.5 px-6 py-4 border-b border-border bg-muted/30">
+            <RefreshCw size={15} className="text-muted-foreground" />
+            <h2 className="text-sm font-semibold">Refeed Contacts</h2>
+          </div>
+          <div className="p-6 space-y-4">
+            <div>
+              <p className="text-sm font-medium">Refeed stale &quot;didn&apos;t pick up&quot; contacts</p>
+              <p className="text-xs text-muted-foreground mt-1 max-w-xl">
+                Puts contacts that didn&apos;t pick up after 2+ call occasions, and
+                whose last attempt was over a week ago, back into the shared call
+                pool for anyone to call. Their Apollo numbers are refreshed in the
+                background so new numbers replace the old ones. Contacts are not
+                re-scored.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-1">
+              <Button onClick={handleRefeed} size="sm" disabled={refeeding}>
+                <RefreshCw size={13} className={`mr-1.5 ${refeeding ? "animate-spin" : ""}`} />
+                {refeeding ? "Refeeding..." : "Refeed"}
+              </Button>
+              {refeedMessage && (
+                <span className="flex items-center gap-1 text-sm text-green-600 animate-in fade-in duration-200">
+                  <CheckCircle size={13} /> {refeedMessage}
+                </span>
+              )}
+              {refeedError && (
+                <span className="text-sm text-destructive animate-in fade-in duration-200">{refeedError}</span>
               )}
             </div>
           </div>
