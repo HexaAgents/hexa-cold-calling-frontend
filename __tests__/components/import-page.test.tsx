@@ -45,7 +45,8 @@ describe("ImportPage", () => {
   it("renders page title", async () => {
     render(<ImportPage />);
     await waitFor(() => {
-      expect(screen.getByText("Import")).toBeInTheDocument();
+      // The page title also appears in the mobile app-shell header, so query the heading.
+      expect(screen.getByRole("heading", { name: "Import" })).toBeInTheDocument();
       expect(screen.getByText("Upload an Apollo CSV export to score and import contacts.")).toBeInTheDocument();
     });
   });

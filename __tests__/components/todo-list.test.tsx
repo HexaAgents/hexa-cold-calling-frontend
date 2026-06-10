@@ -56,12 +56,14 @@ describe("TodoListPage", () => {
     });
   });
 
+  // Tasks render twice in the DOM: once in the mobile card list and once in
+  // the desktop table (visibility is controlled by CSS breakpoints).
   it("renders every assignee on a shared task", async () => {
     render(<TodoListPage />);
 
     await waitFor(() => {
-      expect(screen.getByText("Shared task")).toBeInTheDocument();
-      expect(screen.getByText("Srijan")).toBeInTheDocument();
+      expect(screen.getAllByText("Shared task").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Srijan").length).toBeGreaterThan(0);
       expect(screen.getAllByText("Ishaan").length).toBeGreaterThan(0);
     });
   });
@@ -69,8 +71,9 @@ describe("TodoListPage", () => {
   it("navigates when the task row is clicked", async () => {
     render(<TodoListPage />);
 
-    const title = await screen.findByText("Shared task");
-    const row = title.closest("tr");
+    const titles = await screen.findAllByText("Shared task");
+    const row = titles.map((t) => t.closest("tr")).find((r) => r !== null);
+    expect(row).toBeTruthy();
     expect(row).toHaveAttribute("role", "link");
 
     fireEvent.click(row!);

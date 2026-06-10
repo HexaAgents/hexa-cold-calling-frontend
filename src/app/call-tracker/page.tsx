@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef, type Dispatch, type SetStateAction } from "react";
 import AuthGuard from "@/components/layout/auth-guard";
-import AppSidebar from "@/components/layout/app-sidebar";
+import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -70,13 +70,9 @@ export default function CallTrackerPage() {
   return (
     <AuthGuard>
       {(user) => (
-        <div className="flex h-screen overflow-hidden">
-          <AppSidebar user={user} />
-          <main className="relative flex-1 overflow-y-auto bg-background">
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-primary/30 via-primary/70 to-primary/30" />
-            <CallTracker user={user} />
-          </main>
-        </div>
+        <AppShell user={user} title="Call Tracker">
+          <CallTracker user={user} />
+        </AppShell>
       )}
     </AuthGuard>
   );
@@ -414,6 +410,17 @@ function CallTracker({ user }: { user: User }) {
     } else {
       setCallStatus("Bridge calling not yet configured — use Browser calling");
     }
+  };
+
+  // Mobile path: dial with the device's native phone app via a tel: link.
+  // Twilio browser calling needs a secure context (HTTPS), which isn't
+  // available when running over a LAN IP, so phones use their own dialer
+  // and the user logs the outcome manually afterwards.
+  const handleTelCall = (phone: string, phoneType?: string) => {
+    if (!contact || isViewingHistory) return;
+    setOutcomeRequired(true);
+    if (phoneType) setLastDialedPhone({ number: phone, type: phoneType });
+    setCallStatus("Dialing on this device — log the outcome when you're done");
   };
 
   const handleHangUp = () => {
@@ -773,13 +780,13 @@ function CallTracker({ user }: { user: User }) {
 
   if (!started) {
     return (
-      <div className="p-6 max-w-xl mx-auto">
+      <div className="p-4 sm:p-6 max-w-xl mx-auto">
         <h1 className="text-2xl font-semibold tracking-tight mb-1">Call Tracker</h1>
         <p className="text-sm text-muted-foreground mb-6">
           Filter contacts by location, then start calling. Contacts without a location are always included.
         </p>
-        <div className="border border-border bg-card p-6 space-y-4">
-          <div className="grid grid-cols-3 gap-3">
+        <div className="border border-border bg-card p-4 sm:p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <LocationMultiSelect
               label="Country"
               options={locations.countries}
@@ -890,7 +897,7 @@ function CallTracker({ user }: { user: User }) {
   ];
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       {/* Active filters indicator */}
       <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground flex-wrap">
         <button onClick={() => setStarted(false)} className="flex items-center gap-1 text-primary hover:underline">
@@ -955,7 +962,7 @@ function CallTracker({ user }: { user: User }) {
         >
           <ArrowLeft size={14} className="mr-1" /> Back
         </Button>
-        <span className="text-sm text-muted-foreground">
+        <span className="hidden text-sm text-muted-foreground sm:inline">
           {isViewingHistory ? "Viewing previous contact — calling disabled" : "Assigned to you"}
         </span>
         {isViewingHistory ? (
@@ -1003,7 +1010,7 @@ function CallTracker({ user }: { user: User }) {
 
       <div className={`space-y-6 ${claimExpired || isDisabledByHours ? "opacity-50 pointer-events-none select-none" : ""}`}>
         {/* Contact Card */}
-        <div className="border border-border bg-card p-6">
+        <div className="border border-border bg-card p-4 sm:p-6">
           {displayContact.times_called > 0 && (
             <div className="flex items-center gap-2 mb-3">
               <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700">
@@ -1049,7 +1056,7 @@ function CallTracker({ user }: { user: User }) {
 
           <Separator className="my-4" />
 
-          <div className="grid grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
             {displayContact.employees && (
               <div>
                 <p className="text-xs text-muted-foreground">Employees</p>
@@ -1069,9 +1076,9 @@ function CallTracker({ user }: { user: User }) {
               </div>
             )}
             {displayContact.email && (
-              <div>
+              <div className="min-w-0">
                 <p className="text-xs text-muted-foreground">Email</p>
-                <p>{displayContact.email}</p>
+                <p className="break-all">{displayContact.email}</p>
                 {gmailConnected && (
                   <Button
                     size="sm"
@@ -1124,7 +1131,7 @@ function CallTracker({ user }: { user: User }) {
         </div>
 
         {/* Phone Numbers + Dialer */}
-        <div className="border border-border bg-card p-6">
+        <div className="border border-border bg-card p-4 sm:p-6">
           <h2 className="text-sm font-semibold mb-3">Phone Numbers</h2>
           <div className="space-y-2">
             {phones.map(([label, phone, phoneType]) => {
@@ -1133,7 +1140,7 @@ function CallTracker({ user }: { user: User }) {
               const baseNumber = extMatch ? extMatch[1] : phone;
               const ext = extMatch ? extMatch[2] : null;
               return (
-                <div key={label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
+                <div key={label} className="flex flex-col gap-2 py-2 border-b border-border last:border-0 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-xs text-muted-foreground">{label}</p>
                     <div className="flex items-center gap-2">
@@ -1163,6 +1170,7 @@ function CallTracker({ user }: { user: User }) {
                     <Button
                       size="sm"
                       variant="outline"
+                      className="hidden lg:inline-flex"
                       onClick={() => handleCall(phone, "browser", phoneType)}
                       disabled={isViewingHistory}
                     >
@@ -1171,10 +1179,24 @@ function CallTracker({ user }: { user: User }) {
                     <Button
                       size="sm"
                       variant="outline"
+                      className="hidden lg:inline-flex"
                       onClick={() => handleCall(phone, "bridge", phoneType)}
                       disabled={isViewingHistory}
                     >
                       <Phone size={12} className="mr-1" /> Phone
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={`flex-1 min-h-[40px] lg:hidden ${isViewingHistory ? "pointer-events-none opacity-50" : ""}`}
+                      asChild
+                    >
+                      <a
+                        href={`tel:${baseNumber.replace(/[^+\d]/g, "")}`}
+                        onClick={() => handleTelCall(phone, phoneType)}
+                      >
+                        <PhoneCall size={14} className="mr-1.5" /> Call
+                      </a>
                     </Button>
                   </div>
                 </div>
@@ -1201,7 +1223,7 @@ function CallTracker({ user }: { user: User }) {
         </div>
 
         {/* Call Script */}
-        <div className="border border-border bg-card p-6">
+        <div className="border border-border bg-card p-4 sm:p-6">
           <h2 className="text-sm font-semibold mb-3">Call Script</h2>
           <div className="space-y-3 text-sm leading-relaxed bg-muted/40 rounded-md p-4">
             <p>
@@ -1260,7 +1282,7 @@ function CallTracker({ user }: { user: User }) {
         </div>
 
         {/* Call Outcome */}
-        <div className="border border-border bg-card p-6">
+        <div className="border border-border bg-card p-4 sm:p-6">
           <h2 className="text-sm font-semibold mb-3">Call Outcome</h2>
           <div className="relative min-h-[4rem]">
             {outcome && !outcomeSaved && !hasLoggedThisCall && (
@@ -1273,7 +1295,7 @@ function CallTracker({ user }: { user: User }) {
                 <CheckCircle size={12} /> Saved
               </p>
             )}
-            <div className="grid grid-cols-4 gap-2 pt-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3">
               {([
                 { value: "didnt_pick_up", label: "Didn't Pick Up", icon: PhoneMissed },
                 { value: "not_interested", label: "Not Interested", icon: ThumbsDown },
@@ -1286,7 +1308,7 @@ function CallTracker({ user }: { user: User }) {
                   <Button
                     key={value}
                     variant="outline"
-                    className={`h-auto flex-col gap-1.5 py-3 text-xs font-medium transition-all ${
+                    className={`h-auto min-h-[44px] flex-col gap-1.5 py-3 text-xs font-medium transition-all ${
                       isSelected && !isSaved
                         ? "border-green-500 bg-green-500/10 text-green-700 dark:text-green-400 ring-1 ring-green-500/50"
                         : isSelected && isSaved
@@ -1322,7 +1344,7 @@ function CallTracker({ user }: { user: User }) {
               </span>
             </div>
           ) : outcome === "didnt_pick_up" && (
-            <div className="mt-4 flex items-center gap-3 border-t border-border pt-4">
+            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-4">
               <CalendarDays size={14} className="text-muted-foreground shrink-0" />
               <Label htmlFor="callbackDate" className="text-sm whitespace-nowrap">Callback date</Label>
               <Input
@@ -1354,7 +1376,7 @@ function CallTracker({ user }: { user: User }) {
         </div>
 
         {/* Notes */}
-        <div className="border border-border bg-card p-6">
+        <div className="border border-border bg-card p-4 sm:p-6">
           <h2 className="text-sm font-semibold mb-3">Notes</h2>
           <div className="flex gap-2 mb-4">
             <Textarea
@@ -1414,7 +1436,7 @@ function CallTracker({ user }: { user: User }) {
 
         {/* Call History */}
         {calls.length > 0 && (
-          <div className="border border-border bg-card p-6">
+          <div className="border border-border bg-card p-4 sm:p-6">
             <h2 className="text-sm font-semibold mb-3">Call History</h2>
             <div className="space-y-2">
               {calls.map((call) => (
@@ -1456,7 +1478,7 @@ function CallTracker({ user }: { user: User }) {
 
         {/* Email History */}
         {emailLogs.length > 0 && (
-          <div className="border border-border bg-card p-6">
+          <div className="border border-border bg-card p-4 sm:p-6">
             <h2 className="text-sm font-semibold mb-3">Email History</h2>
             <div className="space-y-2">
               {emailLogs.map((log) => (
@@ -1615,7 +1637,7 @@ function CallTracker({ user }: { user: User }) {
                 <CheckCircle size={12} /> Saved
               </p>
             )}
-            <div className="grid grid-cols-4 gap-2 pt-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3">
               {([
                 { value: "didnt_pick_up", label: "Didn't Pick Up", icon: PhoneMissed },
                 { value: "not_interested", label: "Not Interested", icon: ThumbsDown },
@@ -1628,7 +1650,7 @@ function CallTracker({ user }: { user: User }) {
                   <Button
                     key={value}
                     variant="outline"
-                    className={`h-auto flex-col gap-1.5 py-3 text-xs font-medium transition-all ${
+                    className={`h-auto min-h-[44px] flex-col gap-1.5 py-3 text-xs font-medium transition-all ${
                       isSelected && !isSaved
                         ? "border-green-500 bg-green-500/10 text-green-700 dark:text-green-400 ring-1 ring-green-500/50"
                         : isSelected && isSaved

@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, type RefObject } from "react";
 import { useSearchParams } from "next/navigation";
 import AuthGuard from "@/components/layout/auth-guard";
-import AppSidebar from "@/components/layout/app-sidebar";
+import AppShell from "@/components/layout/app-shell";
 import { apiFetch, ensureFreshToken } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,13 +74,9 @@ export default function SettingsPage() {
   return (
     <AuthGuard>
       {(user) => (
-        <div className="flex h-screen overflow-hidden">
-          <AppSidebar user={user} />
-          <main className="relative flex-1 overflow-y-auto bg-background">
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-primary/30 via-primary/70 to-primary/30" />
-            <SettingsContent />
-          </main>
-        </div>
+        <AppShell user={user} title="Settings">
+          <SettingsContent />
+        </AppShell>
       )}
     </AuthGuard>
   );
@@ -281,14 +277,14 @@ function SettingsContent() {
   ];
 
   return (
-    <div className="flex justify-center py-10 px-6">
+    <div className="flex justify-center py-6 sm:py-10 px-4 sm:px-6">
       <div className="w-full max-w-2xl space-y-8">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Manage your calling preferences, email integration, and account.
           </p>
-          <nav className="flex gap-1 mt-4">
+          <nav className="flex flex-wrap gap-1 mt-4">
             {sections.map((s) => (
               <button
                 key={s.id}
@@ -349,7 +345,7 @@ function SettingsContent() {
             <h2 className="text-sm font-semibold">Calling Preferences</h2>
           </div>
           <div className="p-6 space-y-5">
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-1.5">
                 <Label htmlFor="threshold">Stop after N call occasions</Label>
                 <Input
@@ -406,7 +402,7 @@ function SettingsContent() {
             {gmailLoading ? (
               <p className="text-sm text-muted-foreground">Checking connection...</p>
             ) : gmailConnected ? (
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2.5">
                   <div className="h-2 w-2 rounded-full bg-green-500" />
                   <span className="text-sm">
@@ -418,12 +414,12 @@ function SettingsContent() {
                 </Button>
               </div>
             ) : (
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm">No Gmail account connected.</p>
                   <p className="text-xs text-muted-foreground mt-0.5">Connect to send follow-up emails from the call tracker.</p>
                 </div>
-                <Button size="sm" onClick={handleConnectGmail}>
+                <Button size="sm" className="self-start" onClick={handleConnectGmail}>
                   <Mail size={13} className="mr-1.5" /> Connect Gmail
                 </Button>
               </div>
@@ -595,7 +591,7 @@ function SettingsContent() {
               </p>
             </div>
 
-            <div className="flex items-center gap-3 pt-1">
+            <div className="flex flex-wrap items-center gap-3 pt-1">
               <Button onClick={handleRefeed} size="sm" disabled={refeeding}>
                 <RefreshCw size={13} className={`mr-1.5 ${refeeding ? "animate-spin" : ""}`} />
                 {refeeding ? "Refeeding..." : "Refeed"}

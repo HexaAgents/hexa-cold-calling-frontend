@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import AuthGuard from "@/components/layout/auth-guard";
-import AppSidebar from "@/components/layout/app-sidebar";
+import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
 import {
   Table,
@@ -42,13 +42,9 @@ export default function ProductivityPage() {
   return (
     <AuthGuard>
       {(user) => (
-        <div className="flex h-screen overflow-hidden">
-          <AppSidebar user={user} />
-          <main className="relative flex-1 overflow-y-auto bg-background">
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-primary/30 via-primary/70 to-primary/30" />
-            <ProductivityContent />
-          </main>
-        </div>
+        <AppShell user={user} title="Productivity">
+          <ProductivityContent />
+        </AppShell>
       )}
     </AuthGuard>
   );
@@ -151,9 +147,9 @@ function ProductivityContent() {
   }
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-8">
+    <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Productivity</h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -219,12 +215,12 @@ function ProductivityContent() {
             <TrendingUp size={15} className="text-muted-foreground" />
             <h2 className="text-sm font-semibold">Call Outcome Flow</h2>
           </div>
-          <div className="p-6">
-            <div className="flex items-stretch justify-center gap-0">
+          <div className="p-4 sm:p-6">
+            <div className="flex flex-col items-stretch gap-3 lg:flex-row lg:items-stretch lg:justify-center lg:gap-0">
               <div className="flex items-center">
-                <FlowNode label="Total Calls" value={overall.total} className="border-primary/50 bg-primary/5" />
+                <FlowNode label="Total Calls" value={overall.total} className="w-full lg:w-auto border-primary/50 bg-primary/5" />
               </div>
-              <div className="flex items-center px-2">
+              <div className="hidden lg:flex items-center px-2">
                 <div className="w-8 border-t-2 border-dashed border-muted-foreground/30" />
                 <ArrowRight size={16} className="text-muted-foreground/50 -ml-1" />
               </div>
@@ -257,8 +253,8 @@ function ProductivityContent() {
             {perUser
               .sort((a, b) => b.breakdown.total - a.breakdown.total)
               .map((u) => (
-              <div key={u.user_id} className="p-6 space-y-3">
-                <div className="flex items-center justify-between">
+              <div key={u.user_id} className="p-4 sm:p-6 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary">
                       {u.first_name[0]}
@@ -289,6 +285,7 @@ function ProductivityContent() {
           <Phone size={15} className="text-muted-foreground" />
           <h2 className="text-sm font-semibold">Daily Call Log</h2>
         </div>
+        <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -341,6 +338,7 @@ function ProductivityContent() {
             )}
           </TableBody>
         </Table>
+        </div>
       </section>
     </div>
   );
@@ -404,7 +402,7 @@ function BestTimeToCall({ data }: { data: BestCallTimesResponse }) {
 
   return (
     <section className="rounded-lg border border-border bg-card overflow-hidden">
-      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border bg-muted/30">
+      <div className="flex flex-wrap items-center gap-2.5 px-4 py-3 border-b border-border bg-muted/30">
         <Clock size={15} className="text-muted-foreground" />
         <h2 className="text-sm font-semibold">Best Time to Call</h2>
         <span className="ml-auto text-xs text-muted-foreground">
@@ -414,7 +412,7 @@ function BestTimeToCall({ data }: { data: BestCallTimesResponse }) {
 
       <div className="p-4 space-y-4">
         {/* Best-window callouts */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div className="rounded-md border border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20 px-3 py-2">
             <p className="text-[11px] font-medium text-muted-foreground">Best hour</p>
             {best_hour ? (

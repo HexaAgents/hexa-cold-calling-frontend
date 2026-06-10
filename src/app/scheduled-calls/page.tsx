@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import AuthGuard from "@/components/layout/auth-guard";
-import AppSidebar from "@/components/layout/app-sidebar";
+import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,13 +56,9 @@ export default function ScheduledCallsPage() {
   return (
     <AuthGuard>
       {(user) => (
-        <div className="flex h-screen overflow-hidden">
-          <AppSidebar user={user} />
-          <main className="relative flex-1 overflow-y-auto bg-background">
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-primary/30 via-primary/70 to-primary/30" />
-            <ScheduledCallsContent />
-          </main>
-        </div>
+        <AppShell user={user} title="Scheduled">
+          <ScheduledCallsContent />
+        </AppShell>
       )}
     </AuthGuard>
   );
@@ -183,7 +179,7 @@ function ScheduledCallsContent() {
   }
 
   return (
-    <div className="py-8 px-6 max-w-4xl mx-auto">
+    <div className="py-6 sm:py-8 px-4 sm:px-6 max-w-4xl mx-auto">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div className="flex items-center gap-3.5">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
@@ -242,10 +238,10 @@ function ScheduledCallsContent() {
                     : "hover:bg-accent/20"
                 }`}
               >
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-4">
+                <div className="p-4 sm:p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-3 mb-1">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-1">
                         <Link
                           href={`/contacts/${call.contact_id}`}
                           className="text-base font-semibold hover:text-primary transition-colors flex items-center gap-1"
@@ -255,7 +251,7 @@ function ScheduledCallsContent() {
                         </Link>
                         <CountdownBadge scheduledAt={call.scheduled_at} />
                       </div>
-                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
                         <span className="flex items-center gap-1.5">
                           <Building2 size={12} />
                           {call.company_name || "—"}
@@ -267,7 +263,7 @@ function ScheduledCallsContent() {
                         </span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 sm:shrink-0">
                       <Button
                         size="sm"
                         variant="outline"
@@ -287,7 +283,7 @@ function ScheduledCallsContent() {
                     </div>
                   </div>
 
-                  <div className="mt-3 flex items-center gap-4 text-sm">
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
                     <div className="flex items-center gap-1.5 text-muted-foreground">
                       <CalendarClock size={13} />
                       <span>

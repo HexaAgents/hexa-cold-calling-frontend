@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import AuthGuard from "@/components/layout/auth-guard";
-import AppSidebar from "@/components/layout/app-sidebar";
+import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -34,13 +34,9 @@ export default function CompaniesPage() {
   return (
     <AuthGuard>
       {(user) => (
-        <div className="flex h-screen overflow-hidden">
-          <AppSidebar user={user} />
-          <main className="relative flex-1 overflow-y-auto bg-background">
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-primary/30 via-primary/70 to-primary/30" />
-            <CompaniesContent />
-          </main>
-        </div>
+        <AppShell user={user} title="Companies">
+          <CompaniesContent />
+        </AppShell>
       )}
     </AuthGuard>
   );
@@ -112,7 +108,7 @@ function CompaniesContent() {
     const location = [c.city, c.state, c.country].filter(Boolean).join(", ");
 
     return (
-      <div className="py-8 px-6 max-w-5xl mx-auto">
+      <div className="py-6 sm:py-8 px-4 sm:px-6 max-w-5xl mx-auto">
         <button
           onClick={() => {
             setSelectedCompany(null);
@@ -123,10 +119,10 @@ function CompaniesContent() {
           <ArrowLeft size={14} /> Back to companies
         </button>
 
-        <div className="flex items-start justify-between mb-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-2">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">{c.company_name}</h1>
-            <div className="flex items-center gap-3 mt-1.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-1.5">
               {c.industry_tag && (
                 <Badge variant="secondary" className="text-xs">{c.industry_tag}</Badge>
               )}
@@ -142,7 +138,7 @@ function CompaniesContent() {
               )}
             </div>
           </div>
-          <Badge variant="outline" className="text-sm gap-1.5">
+          <Badge variant="outline" className="self-start text-sm gap-1.5">
             <Users size={13} /> {detail.contacts.length} contacts
           </Badge>
         </div>
@@ -153,7 +149,7 @@ function CompaniesContent() {
           </div>
         )}
 
-        <div className="flex gap-3 mt-4">
+        <div className="flex flex-wrap gap-3 mt-4">
           {c.website && (
             <a
               href={c.website.startsWith("http") ? c.website : `https://${c.website}`}
@@ -182,7 +178,65 @@ function CompaniesContent() {
 
         <h2 className="text-sm font-semibold mb-3">Contacts at {c.company_name}</h2>
 
-        <div className="rounded-lg border border-border bg-card overflow-hidden">
+        {/* Mobile card list */}
+        <div className="space-y-2 lg:hidden">
+          {detail.contacts.map((ct: Contact) => {
+            const phone = ct.mobile_phone || ct.work_direct_phone || ct.corporate_phone;
+            return (
+              <button
+                key={ct.id}
+                type="button"
+                onClick={() => router.push(`/contacts/${ct.id}`)}
+                className="w-full rounded-lg border border-border bg-card p-4 text-left transition-colors active:bg-muted/50"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {ct.first_name} {ct.last_name}
+                    </p>
+                    {ct.title && (
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{ct.title}</p>
+                    )}
+                  </div>
+                  {ct.score != null && (
+                    <span className="shrink-0 font-mono text-sm">{ct.score}</span>
+                  )}
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {ct.call_outcome && (
+                    <Badge
+                      variant={
+                        ct.call_outcome === "interested" ? "default"
+                        : ct.call_outcome === "not_interested" || ct.call_outcome === "bad_number" ? "destructive"
+                        : "outline"
+                      }
+                      className="text-xs"
+                    >
+                      {OUTCOME_LABELS[ct.call_outcome] || ct.call_outcome}
+                    </Badge>
+                  )}
+                  {phone && (
+                    <a
+                      href={`tel:${phone.replace(/[^+\d]/g, "")}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-mono text-xs text-primary underline-offset-2 hover:underline"
+                    >
+                      {phone}
+                    </a>
+                  )}
+                  {ct.email && (
+                    <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                      <Mail size={11} className="shrink-0" />
+                      <span className="truncate">{ct.email}</span>
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="hidden rounded-lg border border-border bg-card overflow-hidden lg:block">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30">
@@ -265,15 +319,15 @@ function CompaniesContent() {
 
   // --- LIST VIEW ---
   return (
-    <div className="py-8 px-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="py-6 sm:py-8 px-4 sm:px-6 max-w-5xl mx-auto">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Companies</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {companies.length} companies &middot; {totalContacts} contacts
           </p>
         </div>
-        <div className="relative w-64">
+        <div className="relative w-full sm:w-64">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
@@ -300,7 +354,7 @@ function CompaniesContent() {
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-card overflow-hidden">
-          <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-5 py-3 border-b border-border bg-muted/30 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <div className="hidden lg:grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-5 py-3 border-b border-border bg-muted/30 text-xs font-medium text-muted-foreground uppercase tracking-wider">
             <span>Company</span>
             <span className="text-center w-20">Contacts</span>
             <span className="text-center w-20">Avg Score</span>
@@ -313,7 +367,7 @@ function CompaniesContent() {
               <button
                 key={c.company_name}
                 onClick={() => handleSelectCompany(c.company_name)}
-                className="w-full grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-5 py-3.5 border-b border-border last:border-0 hover:bg-muted/40 transition-colors text-left"
+                className="w-full border-b border-border last:border-0 hover:bg-muted/40 active:bg-muted/40 transition-colors text-left px-4 py-3.5 lg:grid lg:grid-cols-[1fr_auto_auto_auto_auto] lg:items-center lg:gap-4 lg:px-5"
               >
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{c.company_name}</p>
@@ -330,17 +384,34 @@ function CompaniesContent() {
                       </span>
                     )}
                   </div>
+                  {/* Mobile-only meta row */}
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 lg:hidden">
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {c.contact_count} contact{c.contact_count === 1 ? "" : "s"}
+                    </span>
+                    <span className="text-xs text-muted-foreground font-mono tabular-nums">
+                      Score {c.avg_score ?? "—"}
+                    </span>
+                    {c.industry_tag && (
+                      <span className="text-xs text-muted-foreground truncate">{c.industry_tag}</span>
+                    )}
+                    {location && (
+                      <span className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                        <MapPin size={10} /> {location}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <span className="text-sm text-center w-20 tabular-nums font-medium">
+                <span className="hidden lg:inline text-sm text-center w-20 tabular-nums font-medium">
                   {c.contact_count}
                 </span>
-                <span className="text-sm text-center w-20 tabular-nums font-mono">
+                <span className="hidden lg:inline text-sm text-center w-20 tabular-nums font-mono">
                   {c.avg_score ?? "—"}
                 </span>
-                <span className="text-xs text-muted-foreground w-32 truncate">
+                <span className="hidden lg:inline text-xs text-muted-foreground w-32 truncate">
                   {c.industry_tag || "—"}
                 </span>
-                <span className="text-xs text-muted-foreground w-36 truncate flex items-center gap-1">
+                <span className="hidden lg:flex text-xs text-muted-foreground w-36 truncate items-center gap-1">
                   {location ? <><MapPin size={10} /> {location}</> : "—"}
                 </span>
               </button>

@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo } from "react";
 import AuthGuard from "@/components/layout/auth-guard";
-import AppSidebar from "@/components/layout/app-sidebar";
+import AppShell from "@/components/layout/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -23,6 +23,7 @@ import {
   Search,
   Plus,
   Trash2,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -303,13 +304,9 @@ export default function LinkedInTemplatesPage() {
   return (
     <AuthGuard>
       {(user) => (
-        <div className="flex h-screen overflow-hidden">
-          <AppSidebar user={user} />
-          <main className="relative flex-1 overflow-y-auto bg-background">
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-primary/30 via-primary/70 to-primary/30" />
-            <TemplatesContent />
-          </main>
-        </div>
+        <AppShell user={user} title="Templates">
+          <TemplatesContent />
+        </AppShell>
       )}
     </AuthGuard>
   );
@@ -324,6 +321,8 @@ function TemplatesContent() {
   const [copied, setCopied] = useState(false);
   const [search, setSearch] = useState("");
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  // Mobile-only: the template picker collapses to a disclosure above the editor.
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [newRole, setNewRole] = useState("");
   const [newCategory, setNewCategory] = useState("");
   const [newAngle, setNewAngle] = useState("");
@@ -414,9 +413,9 @@ function TemplatesContent() {
   };
 
   return (
-    <div className="flex h-full">
+    <div className="flex min-h-full flex-col lg:h-full lg:flex-row">
       {/* Role selector panel */}
-      <div className="w-[260px] flex-shrink-0 border-r border-border overflow-y-auto">
+      <div className="w-full shrink-0 border-b border-border lg:w-[260px] lg:border-b-0 lg:border-r lg:overflow-y-auto">
         <div className="p-4 pb-3">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold">Templates</h2>
@@ -430,7 +429,20 @@ function TemplatesContent() {
               <Plus size={14} />
             </Button>
           </div>
-          <div className="relative">
+          {/* Mobile: collapsed picker showing current selection */}
+          <button
+            type="button"
+            onClick={() => setPickerOpen((o) => !o)}
+            className="mb-3 flex w-full items-center justify-between rounded-md border border-border bg-card px-3 py-2.5 text-sm lg:hidden"
+            aria-expanded={pickerOpen}
+          >
+            <span className="truncate font-medium">{selected.role}</span>
+            <ChevronDown
+              size={15}
+              className={cn("shrink-0 text-muted-foreground transition-transform", pickerOpen && "rotate-180")}
+            />
+          </button>
+          <div className={cn("relative", pickerOpen ? "" : "hidden lg:block")}>
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
@@ -440,7 +452,7 @@ function TemplatesContent() {
             />
           </div>
         </div>
-        <nav className="pb-4">
+        <nav className={cn("pb-4 max-h-[45dvh] overflow-y-auto lg:max-h-none lg:overflow-visible", pickerOpen ? "" : "hidden lg:block")}>
           {categories.map((cat) => {
             const catTemplates = filtered.filter((t) => t.category === cat);
             return (
@@ -451,7 +463,10 @@ function TemplatesContent() {
                 {catTemplates.map((t) => (
                   <button
                     key={t.id}
-                    onClick={() => setSelectedId(t.id)}
+                    onClick={() => {
+                      setSelectedId(t.id);
+                      setPickerOpen(false);
+                    }}
                     className={cn(
                       "w-full text-left px-4 py-2 text-[13px] transition-colors flex items-center justify-between group",
                       selectedId === t.id
@@ -466,7 +481,7 @@ function TemplatesContent() {
                           e.stopPropagation();
                           handleDeleteCustom(t.id);
                         }}
-                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-0.5"
+                        className="opacity-100 lg:opacity-0 lg:group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity p-0.5"
                       >
                         <Trash2 size={11} />
                       </button>
@@ -485,16 +500,16 @@ function TemplatesContent() {
       </div>
 
       {/* Template content panel */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-3xl mx-auto py-8 px-6">
-          <div className="flex items-start justify-between mb-4">
+      <div className="flex-1 lg:overflow-y-auto">
+        <div className="max-w-3xl mx-auto py-6 sm:py-8 px-4 sm:px-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
             <div>
               <h1 className="text-xl font-semibold tracking-tight">{selected.role}</h1>
               <p className="text-sm text-muted-foreground mt-1">
                 {selected.angle}
               </p>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
               <Badge variant="outline" className="text-xs tabular-nums">
                 {currentText.trim().split(/\s+/).filter(Boolean).length} words
               </Badge>
@@ -508,10 +523,11 @@ function TemplatesContent() {
           </div>
 
           <div className="rounded-lg border border-border bg-card overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-muted/30">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-b border-border bg-muted/30">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <FileText size={13} />
-                <span>Edit template below, then copy to clipboard</span>
+                <span className="hidden sm:inline">Edit template below, then copy to clipboard</span>
+                <span className="sm:hidden">Edit, then copy</span>
               </div>
               <div className="flex items-center gap-2">
                 {isEdited && (

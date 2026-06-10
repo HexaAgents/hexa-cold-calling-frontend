@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import AuthGuard from "@/components/layout/auth-guard";
-import AppSidebar from "@/components/layout/app-sidebar";
+import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,13 +47,9 @@ export default function ContactsPage() {
   return (
     <AuthGuard>
       {(user) => (
-        <div className="flex h-screen overflow-hidden">
-          <AppSidebar user={user} />
-          <main className="relative flex-1 overflow-y-auto bg-background">
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-primary/30 via-primary/70 to-primary/30" />
-            <ContactsContent />
-          </main>
-        </div>
+        <AppShell user={user} title="Contacts">
+          <ContactsContent />
+        </AppShell>
       )}
     </AuthGuard>
   );
@@ -182,7 +178,7 @@ function ContactsContent() {
     c.mobile_phone || c.work_direct_phone || c.corporate_phone || null;
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
       {/* Header */}
       <div className="mb-6 space-y-4">
         <div className="flex items-center justify-between">
@@ -194,7 +190,7 @@ function ContactsContent() {
           </div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="relative flex-1 min-w-[200px] max-w-[300px]">
+          <div className="relative flex-1 min-w-[200px] sm:max-w-[300px]">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search by name or phone..."
@@ -222,7 +218,7 @@ function ContactsContent() {
 
       {/* Enrichment banner */}
       {(enrichmentCounts.pending_enrichment ?? 0) > 0 && (
-        <div className={`mb-5 flex items-center justify-between rounded-lg border p-4 ${
+        <div className={`mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-lg border p-4 ${
           creditError
             ? "border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30"
             : "border-border bg-muted/40"
@@ -244,8 +240,68 @@ function ContactsContent() {
         </div>
       )}
 
+      {/* Mobile card list */}
+      <div className="space-y-2 lg:hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-muted-foreground">
+            <Loader2 size={18} className="mr-2 animate-spin" /> Loading contacts...
+          </div>
+        ) : contacts.length === 0 ? (
+          <div className="flex flex-col items-center gap-2 py-16">
+            <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+              <Users size={16} className="text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium">No contacts found</p>
+            <p className="text-xs text-muted-foreground">
+              {debouncedSearch ? "Try a different search term." : "Import a CSV to get started."}
+            </p>
+          </div>
+        ) : (
+          contacts.map((c) => {
+            const phone = phoneDisplay(c);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => router.push(`/contacts/${c.id}`)}
+                className="w-full rounded-lg border border-border bg-card p-4 text-left transition-colors active:bg-muted/50"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">
+                      {c.first_name} {c.last_name}
+                    </p>
+                    <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                      {c.company_name || "—"}
+                    </p>
+                  </div>
+                  <span className="shrink-0 font-mono text-sm">{c.score ?? "—"}</span>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Badge variant={statusVariant(c)} className="text-[10px] h-5">
+                    {displayStatus(c)}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {c.times_called ?? 0} call{(c.times_called ?? 0) === 1 ? "" : "s"}
+                  </span>
+                  {phone && (
+                    <a
+                      href={`tel:${phone.replace(/[^+\d]/g, "")}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="ml-auto font-mono text-xs text-primary underline-offset-2 hover:underline"
+                    >
+                      {phone}
+                    </a>
+                  )}
+                </div>
+              </button>
+            );
+          })
+        )}
+      </div>
+
       {/* Table */}
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="hidden rounded-lg border border-border bg-card overflow-hidden lg:block">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/30">

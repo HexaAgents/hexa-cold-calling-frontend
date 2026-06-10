@@ -5,13 +5,15 @@ This directory contains the Vitest and React Testing Library tests for the Next.
 ## Setup
 
 - `vitest.config.ts` runs tests in `jsdom` and loads `__tests__/setup.tsx`.
-- `__tests__/setup.tsx` mocks `next/navigation`, `@/lib/api`, `AuthGuard`, `AppSidebar`, and `localStorage`.
+- `__tests__/setup.tsx` mocks `next/navigation`, `@/lib/api`, `AuthGuard`, `AppSidebar`, and `localStorage`. `AppShell` is not mocked and renders for real, so the mobile header (including the optional page title) is present in page tests.
 - Page tests should mock `apiFetch` by path because most routes fetch more than one endpoint on mount.
 - New component tests should prefer `getByRole`, `getByLabelText`, and visible copy before falling back to `data-testid`.
+- Responsive dual rendering: pages with table/card layouts render both the mobile card list and the desktop table in the DOM (visibility is CSS-only, which jsdom ignores). Use `getAllBy*`/`queryAllBy*` for row content, `getByRole("heading", ...)` for page titles, and `closest("tr")` when a test needs the table variant specifically.
 
 ## Coverage Map
 
 - `components/login.test.tsx`: login form rendering, validation, and auth API behavior.
+- `components/app-shell.test.tsx`: responsive shell chrome — main content rendering, mobile header title, and drawer open/close via hamburger, close button, and overlay.
 - `components/app-sidebar.test.tsx`: sidebar navigation, active route state, sign out behavior, and current-user display.
 - `components/hexa-logo.test.tsx`: logo accessibility and optional wordmark rendering.
 - `components/call-tracker.test.tsx`: call queue display, call actions, prompt states, and route-level behavior around the calling workflow.

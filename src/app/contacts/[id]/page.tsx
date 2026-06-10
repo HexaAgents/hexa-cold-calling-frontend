@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import AuthGuard from "@/components/layout/auth-guard";
-import AppSidebar from "@/components/layout/app-sidebar";
+import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,13 +23,9 @@ export default function ContactDetailPage() {
   return (
     <AuthGuard>
       {(user) => (
-        <div className="flex h-screen overflow-hidden">
-          <AppSidebar user={user} />
-          <main className="relative flex-1 overflow-y-auto bg-background">
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-primary/30 via-primary/70 to-primary/30" />
-            <ContactDetail />
-          </main>
-        </div>
+        <AppShell user={user} title="Contact">
+          <ContactDetail />
+        </AppShell>
       )}
     </AuthGuard>
   );
@@ -157,7 +153,7 @@ function ContactDetail() {
   ];
 
   return (
-    <div className="p-6 max-w-3xl">
+    <div className="p-4 sm:p-6 max-w-3xl">
       <div className="mb-6 flex items-center justify-between">
         <button
           onClick={() => router.push("/contacts")}
@@ -186,10 +182,10 @@ function ContactDetail() {
 
       <Separator className="my-6" />
 
-      <div className="grid grid-cols-2 gap-x-8 gap-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-3">
         {fields.map(([label, value]) =>
           value ? (
-            <div key={label}>
+            <div key={label} className="min-w-0">
               <p className="text-xs text-muted-foreground">{label}</p>
               {(label === "Website" || label === "LinkedIn" || label === "Company LinkedIn") ? (
                 <a
@@ -201,8 +197,15 @@ function ContactDetail() {
                   {value.replace(/^https?:\/\/(www\.)?/, "").slice(0, 40)}
                   <ExternalLink size={10} />
                 </a>
+              ) : label.includes("Phone") ? (
+                <a
+                  href={`tel:${value.replace(/[^+\d]/g, "")}`}
+                  className="text-sm text-primary underline-offset-2 hover:underline"
+                >
+                  {value}
+                </a>
               ) : (
-                <p className="text-sm">{value}</p>
+                <p className="text-sm wrap-break-word">{value}</p>
               )}
             </div>
           ) : null
@@ -219,9 +222,9 @@ function ContactDetail() {
 
       <h2 className="text-lg font-semibold mb-3">Update Call Status</h2>
       <div className="border border-border bg-card p-4">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Select value={outcome} onValueChange={(v) => { setOutcome(v); setOutcomeSaved(false); }}>
-            <SelectTrigger className="w-[220px]">
+            <SelectTrigger className="w-full sm:w-[220px]">
               <SelectValue placeholder="Select outcome..." />
             </SelectTrigger>
             <SelectContent>
@@ -255,9 +258,9 @@ function ContactDetail() {
           {calls.map((call) => (
             <div
               key={call.id}
-              className="flex items-center justify-between border border-border p-3 text-sm"
+              className="flex flex-wrap items-center justify-between gap-2 border border-border p-3 text-sm"
             >
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <span className="text-muted-foreground">{call.call_date}</span>
                 <Badge variant="secondary" className="capitalize">
                   {call.call_method === "browser" ? "Browser Call" : "Phone Call"}

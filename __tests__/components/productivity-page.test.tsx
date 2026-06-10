@@ -14,7 +14,8 @@ describe("ProductivityPage", () => {
     mockApiFetch.mockResolvedValue({ users: [], rows: [] });
     render(<ProductivityPage />);
     await waitFor(() => {
-      expect(screen.getByText("Productivity")).toBeInTheDocument();
+      // The page title also appears in the mobile app-shell header, so query the heading.
+      expect(screen.getByRole("heading", { name: "Productivity" })).toBeInTheDocument();
       expect(screen.getByText("Call outcomes, conversion flow, and team performance.")).toBeInTheDocument();
     });
   });

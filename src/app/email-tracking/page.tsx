@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import AuthGuard from "@/components/layout/auth-guard";
-import AppSidebar from "@/components/layout/app-sidebar";
+import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,13 +26,9 @@ export default function EmailTrackingPage() {
   return (
     <AuthGuard>
       {(user) => (
-        <div className="flex h-screen overflow-hidden">
-          <AppSidebar user={user} />
-          <main className="relative flex-1 overflow-y-auto bg-background">
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-primary/30 via-primary/70 to-primary/30" />
-            <EmailTrackingContent />
-          </main>
-        </div>
+        <AppShell user={user} title="Email Tracking">
+          <EmailTrackingContent />
+        </AppShell>
       )}
     </AuthGuard>
   );
@@ -172,7 +168,7 @@ function EmailTrackingContent() {
 
   if (selectedContactId && selectedContact) {
     return (
-      <div className="py-8 px-6 max-w-4xl mx-auto">
+      <div className="py-6 sm:py-8 px-4 sm:px-6 max-w-4xl mx-auto">
         <button
           onClick={() => {
             setSelectedContactId(null);
@@ -183,16 +179,16 @@ function EmailTrackingContent() {
           <ArrowLeft size={14} /> Back to all contacts
         </button>
 
-        <div className="flex items-center justify-between mb-6">
-          <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
+          <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight">
               {selectedContact.first_name} {selectedContact.last_name}
             </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
+            <p className="text-sm text-muted-foreground mt-0.5 wrap-break-word">
               {selectedContact.company_name} &middot; {selectedContact.email}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <Badge variant="outline" className="gap-1.5">
               <Send size={11} /> {selectedContact.sent_count} sent
             </Badge>
@@ -270,8 +266,8 @@ function EmailTrackingContent() {
   }
 
   return (
-    <div className="py-8 px-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="py-6 sm:py-8 px-4 sm:px-6 max-w-5xl mx-auto">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Email Tracking</h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -283,7 +279,7 @@ function EmailTrackingContent() {
           variant="outline"
           onClick={handleSync}
           disabled={syncing}
-          className="gap-2"
+          className="gap-2 self-start"
         >
           <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
           {syncing ? "Syncing..." : "Sync Now"}
@@ -291,7 +287,7 @@ function EmailTrackingContent() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1">
             <UserIcon size={14} />
@@ -334,7 +330,7 @@ function EmailTrackingContent() {
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-card overflow-hidden">
-          <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-5 py-3 border-b border-border bg-muted/30 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <div className="hidden lg:grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-5 py-3 border-b border-border bg-muted/30 text-xs font-medium text-muted-foreground uppercase tracking-wider">
             <span>Contact</span>
             <span className="text-center w-16">Sent</span>
             <span className="text-center w-16">Received</span>
@@ -347,7 +343,7 @@ function EmailTrackingContent() {
               <button
                 key={c.contact_id}
                 onClick={() => handleSelectContact(c.contact_id)}
-                className="w-full grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-5 py-3.5 border-b border-border last:border-0 hover:bg-muted/40 transition-colors text-left"
+                className="w-full border-b border-border last:border-0 hover:bg-muted/40 active:bg-muted/40 transition-colors text-left px-4 py-3.5 lg:grid lg:grid-cols-[1fr_auto_auto_auto_auto] lg:items-center lg:gap-4 lg:px-5"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <StatusDot status={c.reply_status} />
@@ -363,16 +359,26 @@ function EmailTrackingContent() {
                     </p>
                   </div>
                 </div>
-                <span className="text-sm text-center w-16 tabular-nums">
+                {/* Mobile-only meta row */}
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 pl-[22px] lg:hidden">
+                  <StatusLabel status={c.reply_status} />
+                  <span className="text-xs text-muted-foreground tabular-nums">
+                    {c.sent_count} sent &middot; {c.received_count} received
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatRelative(lastActivity)}
+                  </span>
+                </div>
+                <span className="hidden lg:inline text-sm text-center w-16 tabular-nums">
                   {c.sent_count}
                 </span>
-                <span className="text-sm text-center w-16 tabular-nums">
+                <span className="hidden lg:inline text-sm text-center w-16 tabular-nums">
                   {c.received_count}
                 </span>
-                <div className="w-28 flex justify-center">
+                <div className="hidden lg:flex w-28 justify-center">
                   <StatusLabel status={c.reply_status} />
                 </div>
-                <span className="text-xs text-muted-foreground text-right w-24">
+                <span className="hidden lg:inline text-xs text-muted-foreground text-right w-24">
                   {formatRelative(lastActivity)}
                 </span>
               </button>

@@ -42,6 +42,17 @@ function mockData(todos: Todo[], assignees: TodoAssignee[] = ASSIGNEES) {
   });
 }
 
+// Tasks render twice in the DOM: once in the mobile card list and once in the
+// desktop table (visibility is controlled by CSS breakpoints, which jsdom
+// doesn't apply). Queries below use the *All variants where needed and pick
+// the table row via closest("tr").
+function findTableRow(title: string): HTMLTableRowElement | null {
+  const matches = screen.getAllByText(title);
+  return (matches
+    .map((el) => el.closest("tr"))
+    .find((row) => row !== null) ?? null) as HTMLTableRowElement | null;
+}
+
 describe("TodoListPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -76,21 +87,21 @@ describe("TodoListPage", () => {
     ]);
     render(<TodoListPage />);
 
-    await waitFor(() => expect(screen.getByText("Future task")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Future task").length).toBeGreaterThan(0));
     expect(screen.getByRole("button", { name: /^Upcoming/ })).toHaveAttribute("aria-pressed", "true");
     // Upcoming: only open tasks that are not overdue.
-    expect(screen.queryByText("Overdue task")).not.toBeInTheDocument();
-    expect(screen.queryByText("Done task")).not.toBeInTheDocument();
+    expect(screen.queryAllByText("Overdue task")).toHaveLength(0);
+    expect(screen.queryAllByText("Done task")).toHaveLength(0);
 
     fireEvent.click(screen.getByRole("button", { name: /^Overdue/ }));
-    expect(screen.getByText("Overdue task")).toBeInTheDocument();
-    expect(screen.queryByText("Future task")).not.toBeInTheDocument();
-    expect(screen.queryByText("Done task")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Overdue task").length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("Future task")).toHaveLength(0);
+    expect(screen.queryAllByText("Done task")).toHaveLength(0);
 
     fireEvent.click(screen.getByRole("button", { name: /^Complete/ }));
-    expect(screen.getByText("Done task")).toBeInTheDocument();
-    expect(screen.queryByText("Future task")).not.toBeInTheDocument();
-    expect(screen.queryByText("Overdue task")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Done task").length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("Future task")).toHaveLength(0);
+    expect(screen.queryAllByText("Overdue task")).toHaveLength(0);
   });
 
   it("treats tasks with no due date as Upcoming and keeps completed tasks out of Overdue", async () => {
@@ -99,18 +110,18 @@ describe("TodoListPage", () => {
       makeTodo({ id: "done-overdue", title: "Done overdue", due_date: "2020-01-01", is_done: true }),
     ]);
     render(<TodoListPage />);
-    await waitFor(() => expect(screen.getByText("No due date")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("No due date").length).toBeGreaterThan(0));
 
     // A task with no due date stays in Upcoming.
     expect(screen.getByRole("button", { name: /^Upcoming/ })).toHaveAttribute("aria-pressed", "true");
 
     // Overdue excludes completed tasks even with a past due date.
     fireEvent.click(screen.getByRole("button", { name: /^Overdue/ }));
-    expect(screen.queryByText("Done overdue")).not.toBeInTheDocument();
+    expect(screen.queryAllByText("Done overdue")).toHaveLength(0);
 
     // Complete contains the completed task.
     fireEvent.click(screen.getByRole("button", { name: /^Complete/ }));
-    expect(screen.getByText("Done overdue")).toBeInTheDocument();
+    expect(screen.getAllByText("Done overdue").length).toBeGreaterThan(0);
   });
 
   it("opens on the section from the URL when returning from a task detail", async () => {
@@ -121,9 +132,9 @@ describe("TodoListPage", () => {
     ]);
     render(<TodoListPage />);
 
-    await waitFor(() => expect(screen.getByText("Overdue task")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Overdue task").length).toBeGreaterThan(0));
     expect(screen.getByRole("button", { name: /Open tasks past their due date/ })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.queryByText("Future task")).not.toBeInTheDocument();
+    expect(screen.queryAllByText("Future task")).toHaveLength(0);
   });
 
   it("highlights overdue (not done) rows", async () => {
@@ -132,7 +143,7 @@ describe("TodoListPage", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /^Overdue/ })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /^Overdue/ }));
     const row = await waitFor(() => {
-      const r = screen.getByText("Call back the lead").closest("tr");
+      const r = findTableRow("Call back the lead");
       expect(r).not.toBeNull();
       return r;
     });
@@ -145,7 +156,7 @@ describe("TodoListPage", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /^Overdue/ })).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /^Overdue/ }));
     const row = await waitFor(() => {
-      const r = screen.getByText("Call back the lead").closest("tr");
+      const r = findTableRow("Call back the lead");
       expect(r).not.toBeNull();
       return r;
     });
@@ -155,8 +166,8 @@ describe("TodoListPage", () => {
     const headerCount = screen.getByText("1 overdue");
     expect(headerCount.className).toContain("text-rose");
 
-    const dueDate = screen.getByText("Jan 1, 2020");
-    expect(dueDate.className).toContain("text-rose");
+    const dueDates = screen.getAllByText("Jan 1, 2020");
+    expect(dueDates.some((el) => el.className.includes("text-rose"))).toBe(true);
   });
 
   it("does not highlight completed overdue tasks", async () => {
@@ -164,7 +175,7 @@ describe("TodoListPage", () => {
     render(<TodoListPage />);
     fireEvent.click(await waitFor(() => screen.getByRole("button", { name: /^Complete/ })));
     const row = await waitFor(() => {
-      const r = screen.getByText("Call back the lead").closest("tr");
+      const r = findTableRow("Call back the lead");
       expect(r).not.toBeNull();
       return r;
     });
@@ -182,7 +193,7 @@ describe("TodoListPage", () => {
     render(<TodoListPage />);
 
     // Upcoming (default): open tasks ordered by earliest due date.
-    await waitFor(() => expect(screen.getByText("Open early")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Open early").length).toBeGreaterThan(0));
     const upcoming = screen
       .getAllByRole("link")
       .map((row) => row.textContent || "")
@@ -192,7 +203,7 @@ describe("TodoListPage", () => {
 
     // Complete: done tasks ordered by earliest due date.
     fireEvent.click(screen.getByRole("button", { name: /^Complete/ }));
-    await waitFor(() => expect(screen.getByText("Done early")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Done early").length).toBeGreaterThan(0));
     const complete = screen
       .getAllByRole("link")
       .map((row) => row.textContent || "")
@@ -216,12 +227,12 @@ describe("TodoListPage", () => {
       makeTodo({ id: "theirs", title: "Theirs", assigned_by_id: "someone-else" }),
     ]);
     render(<TodoListPage />);
-    await waitFor(() => expect(screen.getByText("Mine")).toBeInTheDocument());
-    expect(screen.getByLabelText('Delete "Mine"')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Delete "Theirs"')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText("Mine").length).toBeGreaterThan(0));
+    expect(screen.getAllByLabelText('Delete "Mine"').length).toBeGreaterThan(0);
+    expect(screen.queryAllByLabelText('Delete "Theirs"')).toHaveLength(0);
     // The done checkbox is disabled for tasks the user did not assign.
-    expect(screen.getByLabelText('Mark "Theirs" done')).toBeDisabled();
-    expect(screen.getByLabelText('Mark "Mine" done')).not.toBeDisabled();
+    screen.getAllByLabelText('Mark "Theirs" done').forEach((el) => expect(el).toBeDisabled());
+    screen.getAllByLabelText('Mark "Mine" done').forEach((el) => expect(el).not.toBeDisabled());
   });
 
   it("lets the assignee toggle their own task even if they did not create it", async () => {
@@ -229,10 +240,10 @@ describe("TodoListPage", () => {
       makeTodo({ id: "assigned", title: "Assigned to me", assigned_by_id: "someone-else", assigned_to_id: CURRENT_USER_ID }),
     ]);
     render(<TodoListPage />);
-    await waitFor(() => expect(screen.getByText("Assigned to me")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Assigned to me").length).toBeGreaterThan(0));
     // Can mark done (they are the assignee) but cannot delete (not the assigner).
-    expect(screen.getByLabelText('Mark "Assigned to me" done')).not.toBeDisabled();
-    expect(screen.queryByLabelText('Delete "Assigned to me"')).not.toBeInTheDocument();
+    screen.getAllByLabelText('Mark "Assigned to me" done').forEach((el) => expect(el).not.toBeDisabled());
+    expect(screen.queryAllByLabelText('Delete "Assigned to me"')).toHaveLength(0);
   });
 
   it("creates a task with only a title", async () => {

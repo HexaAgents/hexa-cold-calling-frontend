@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import AuthGuard from "@/components/layout/auth-guard";
-import AppSidebar from "@/components/layout/app-sidebar";
+import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -192,7 +192,7 @@ function InlineTitleEditor({
             setDraft(todo.title);
             setEditing(true);
           }}
-          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border/70 bg-background/60 text-muted-foreground opacity-0 transition-all hover:border-primary/40 hover:bg-accent hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border/70 bg-background/60 text-muted-foreground opacity-100 transition-all hover:border-primary/40 hover:bg-accent hover:text-foreground focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
         >
           <Pencil size={12} />
         </button>
@@ -216,10 +216,6 @@ function InlineAssigneeEditor({
   const currentIds = useMemo(() => getTodoAssignees(todo).map((a) => a.id), [todo]);
   const [draftIds, setDraftIds] = useState<string[]>(currentIds);
 
-  useEffect(() => {
-    if (!open) setDraftIds(currentIds);
-  }, [open, currentIds]);
-
   if (!canManage) {
     return <AssigneePills todo={todo} />;
   }
@@ -236,7 +232,10 @@ function InlineAssigneeEditor({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (!next && !sameSelection(draftIds, currentIds)) {
+        if (next) {
+          // Sync the draft to the latest assignees each time the menu opens.
+          setDraftIds(currentIds);
+        } else if (!sameSelection(draftIds, currentIds)) {
           void onSave(todo.id, draftIds);
         }
       }}
@@ -251,7 +250,7 @@ function InlineAssigneeEditor({
           <span className="min-w-0 flex-1">
             <AssigneePills todo={todo} />
           </span>
-          <ChevronDown size={13} className="shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+          <ChevronDown size={13} className="shrink-0 text-muted-foreground opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -352,13 +351,9 @@ export default function TodoListPage() {
   return (
     <AuthGuard>
       {(user) => (
-        <div className="flex h-screen overflow-hidden">
-          <AppSidebar user={user} />
-          <main className="relative flex-1 overflow-y-auto bg-background [scrollbar-gutter:stable]">
-            <div className="absolute top-0 left-0 right-0 h-px bg-linear-to-r from-primary/30 via-primary/70 to-primary/30" />
-            <TodoListContent user={user} />
-          </main>
-        </div>
+        <AppShell user={user} title="To-Do" mainClassName="[scrollbar-gutter:stable]">
+          <TodoListContent user={user} />
+        </AppShell>
       )}
     </AuthGuard>
   );
@@ -484,7 +479,7 @@ function TodoListContent({ user }: { user: User }) {
   }
 
   return (
-    <div className="py-8 px-6 max-w-5xl mx-auto">
+    <div className="py-6 sm:py-8 px-4 sm:px-6 max-w-5xl mx-auto">
       <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div className="flex items-center gap-3.5">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
@@ -586,7 +581,79 @@ function TodoListContent({ user }: { user: User }) {
           </Button>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <>
+        {/* Mobile card list */}
+        <div className="space-y-2 lg:hidden">
+          {filtered.map((todo) => {
+            const backlogged = isBacklogged(todo);
+            const canManage = todo.assigned_by_id === user.id;
+            const canToggleDone = canManage || isTodoAssignedTo(todo, user.id);
+            return (
+              <div
+                key={todo.id}
+                onClick={() => router.push(detailHref(todo.id))}
+                role="link"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    router.push(detailHref(todo.id));
+                  }
+                }}
+                className={`cursor-pointer rounded-xl border border-border bg-card p-4 shadow-sm transition-colors active:bg-muted/40 ${
+                  backlogged ? "border-l-2 border-l-rose-400/60" : ""
+                } ${todo.is_done ? "opacity-65" : ""}`}
+              >
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    aria-label={`Mark "${todo.title}" done`}
+                    checked={todo.is_done}
+                    disabled={!canToggleDone}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={() => handleToggleDone(todo)}
+                    className="mt-0.5 h-[20px] w-[20px] shrink-0 cursor-pointer rounded-md accent-primary transition disabled:cursor-not-allowed disabled:opacity-40"
+                  />
+                  <p className={`min-w-0 flex-1 wrap-break-word text-sm font-medium ${todo.is_done ? "line-through" : ""}`}>
+                    {todo.title}
+                  </p>
+                  {canManage && (
+                    <button
+                      aria-label={`Delete "${todo.title}"`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(todo);
+                      }}
+                      className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-[32px]">
+                  <AssigneePills todo={todo} />
+                  <span
+                    className={`inline-flex items-center gap-1.5 text-xs ${
+                      backlogged
+                        ? "font-medium text-rose-600/90 dark:text-rose-300/90"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    <CalendarDays size={12} className="opacity-70" />
+                    {formatDate(todo.due_date)}
+                  </span>
+                  {todo.assigned_by_name && (
+                    <span className="text-xs text-muted-foreground">
+                      by {todo.assigned_by_name}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="hidden overflow-hidden rounded-xl border border-border bg-card shadow-sm lg:block">
           <Table>
             <TableHeader>
               <TableRow className="border-b border-border bg-muted/40 hover:bg-muted/40">
@@ -672,7 +739,7 @@ function TodoListContent({ user }: { user: User }) {
                             e.stopPropagation();
                             handleDelete(todo);
                           }}
-                          className="rounded-md p-1.5 text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                          className="rounded-md p-1.5 text-muted-foreground opacity-100 transition-all hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 lg:opacity-0 lg:group-hover:opacity-100"
                         >
                           <Trash2 size={15} />
                         </button>
@@ -684,6 +751,7 @@ function TodoListContent({ user }: { user: User }) {
             </TableBody>
           </Table>
         </div>
+        </>
       )}
 
       {showCreate && (
@@ -744,7 +812,7 @@ function CreateTaskModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="dialog" aria-label="Create task">
-      <div className="w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-xl">
+      <div className="max-h-[85dvh] w-full max-w-md overflow-y-auto rounded-xl border border-border bg-background p-5 sm:p-6 shadow-xl">
         <div className="mb-5 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
@@ -782,7 +850,7 @@ function CreateTaskModal({
               className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring"
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">
                 Assign to <span className="text-muted-foreground font-normal">(optional, multiple)</span>

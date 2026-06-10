@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import AuthGuard from "@/components/layout/auth-guard";
-import AppSidebar from "@/components/layout/app-sidebar";
+import AppShell from "@/components/layout/app-shell";
 import { apiUpload, apiFetch, apiDownload } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Upload, FileText, AlertCircle, CreditCard, RefreshCw, CheckCircle2, Loader2, Download } from "lucide-react";
@@ -26,13 +26,9 @@ export default function ImportPage() {
   return (
     <AuthGuard>
       {(user) => (
-        <div className="flex h-screen overflow-hidden">
-          <AppSidebar user={user} />
-          <main className="relative flex-1 overflow-y-auto bg-background">
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-primary/30 via-primary/70 to-primary/30" />
-            <ImportContent />
-          </main>
-        </div>
+        <AppShell user={user} title="Import">
+          <ImportContent />
+        </AppShell>
       )}
     </AuthGuard>
   );
@@ -117,7 +113,7 @@ function ImportContent() {
   };
 
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="p-4 sm:p-6 max-w-2xl">
       <h1 className="text-2xl font-semibold tracking-tight mb-1">Import</h1>
       <p className="text-sm text-muted-foreground mb-6">
         Upload an Apollo CSV export to score and import contacts.
@@ -134,7 +130,7 @@ function ImportContent() {
         }}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
-        className={`border-2 border-dashed p-12 text-center transition-colors ${
+        className={`border-2 border-dashed p-6 sm:p-12 text-center transition-colors ${
           dragOver
             ? "border-primary bg-primary/5"
             : "border-border hover:border-primary/50"
@@ -142,7 +138,8 @@ function ImportContent() {
       >
         <Upload size={32} className="mx-auto text-muted-foreground mb-3" />
         <p className="text-sm text-muted-foreground mb-3">
-          Drag & drop a CSV file here, or click to browse
+          <span className="hidden sm:inline">Drag &amp; drop a CSV file here, or click to browse</span>
+          <span className="sm:hidden">Upload an Apollo CSV export</span>
         </p>
         <input
           ref={fileRef}
@@ -217,8 +214,8 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
 
   return (
     <div className="border border-border bg-card p-4 transition-all duration-300 hover:border-primary/30">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
           <FileText size={14} className="text-muted-foreground shrink-0" />
           <span className="text-sm font-medium truncate">{batch.filename}</span>
           {isProcessing && (
@@ -356,7 +353,7 @@ function RefeedBanner() {
 
   return (
     <div className="mb-6 border border-border bg-card p-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="flex items-start gap-2 flex-1">
           <RefreshCw size={16} className="text-muted-foreground mt-0.5 shrink-0" />
           <div className="space-y-1 text-sm">
@@ -380,7 +377,7 @@ function RefeedBanner() {
           size="sm"
           onClick={handleRefeed}
           disabled={refeeding}
-          className="shrink-0"
+          className="shrink-0 self-start"
         >
           <RefreshCw size={14} className={`mr-1 ${refeeding ? "animate-spin" : ""}`} />
           {refeeding ? "Refeeding..." : "Refeed"}
@@ -450,7 +447,7 @@ function EnrichmentHealthBanner() {
 
   return (
     <div className="mb-6 border border-border bg-card p-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="flex items-start gap-2 flex-1">
           {out_of_credits ? (
             <CreditCard size={16} className="text-amber-500 mt-0.5 shrink-0" />
@@ -491,7 +488,7 @@ function EnrichmentHealthBanner() {
           size="sm"
           onClick={handleRetry}
           disabled={retrying}
-          className="shrink-0"
+          className="shrink-0 self-start"
         >
           {justRetried ? (
             <>

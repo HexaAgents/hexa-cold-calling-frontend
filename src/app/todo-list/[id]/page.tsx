@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import AuthGuard from "@/components/layout/auth-guard";
-import AppSidebar from "@/components/layout/app-sidebar";
+import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -130,13 +130,9 @@ export default function TodoDetailPage() {
   return (
     <AuthGuard>
       {(user) => (
-        <div className="flex h-screen overflow-hidden">
-          <AppSidebar user={user} />
-          <main className="relative flex-1 overflow-y-auto bg-background">
-            <div className="absolute top-0 left-0 right-0 h-px bg-linear-to-r from-primary/30 via-primary/70 to-primary/30" />
-            <TodoDetailContent user={user} />
-          </main>
-        </div>
+        <AppShell user={user} title="To-Do">
+          <TodoDetailContent user={user} />
+        </AppShell>
       )}
     </AuthGuard>
   );
@@ -365,7 +361,7 @@ function TodoDetailContent({ user }: { user: User }) {
   }
 
   return (
-    <div className="px-6 py-4 max-w-5xl mx-auto">
+    <div className="px-4 sm:px-6 py-4 max-w-5xl mx-auto">
       <Link href={backHref} className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
         <ArrowLeft size={15} /> Back to To-Do List
       </Link>
@@ -379,7 +375,7 @@ function TodoDetailContent({ user }: { user: User }) {
       {!canEdit ? (
         <div className={`overflow-hidden rounded-2xl border bg-card shadow-lg shadow-black/5 ${backlogged ? "border-red-200 dark:border-red-950" : "border-border"}`}>
           <div className={`h-1 ${backlogged ? "bg-red-500/80" : todo.is_done ? "bg-emerald-500/80" : "bg-primary/70"}`} />
-          <div className="p-7">
+          <div className="p-5 sm:p-7">
           <div className="flex items-start justify-between gap-4">
             <h1 className={`text-2xl font-semibold tracking-tight ${todo.is_done ? "line-through text-muted-foreground" : ""}`}>
               {todo.title}

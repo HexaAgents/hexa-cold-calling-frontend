@@ -93,10 +93,23 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-foreground overflow-hidden;
     min-height: 100vh;
+    min-height: 100dvh;
   }
+}
+
+/* Safe-area helpers for notched phones (viewport-fit=cover). */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
 }
 
 body::before {
