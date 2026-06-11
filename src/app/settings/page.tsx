@@ -216,7 +216,7 @@ function SettingsContent() {
       );
       setRefeedMessage(
         res.reactivated > 0
-          ? `Refed ${res.reactivated} contact${res.reactivated === 1 ? "" : "s"} back into the call pool. Re-enrichment is running in the background.`
+          ? `Refed ${res.reactivated} contact${res.reactivated === 1 ? "" : "s"} back into the call pool.`
           : "No eligible contacts to refeed right now."
       );
     } catch (err) {
@@ -585,9 +585,7 @@ function SettingsContent() {
               <p className="text-xs text-muted-foreground mt-1 max-w-xl">
                 Puts contacts that didn&apos;t pick up after 2+ call occasions, and
                 whose last attempt was over a week ago, back into the shared call
-                pool for anyone to call. Their Apollo numbers are refreshed in the
-                background so new numbers replace the old ones. Contacts are not
-                re-scored.
+                pool for anyone to call. Contacts are not re-enriched or re-scored.
               </p>
             </div>
 

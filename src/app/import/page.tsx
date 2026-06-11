@@ -341,7 +341,7 @@ function RefeedBanner() {
       );
       setMessage(
         res.reactivated > 0
-          ? `Refed ${res.reactivated} contact${res.reactivated === 1 ? "" : "s"} back into the call pool — re-enriching in the background.`
+          ? `Refed ${res.reactivated} contact${res.reactivated === 1 ? "" : "s"} back into the call pool.`
           : "No eligible contacts to refeed right now."
       );
     } catch (err) {
@@ -360,9 +360,8 @@ function RefeedBanner() {
             <p className="font-medium">Refeed stale &quot;didn&apos;t pick up&quot; contacts</p>
             <p className="text-xs text-muted-foreground max-w-xl">
               Puts contacts that didn&apos;t pick up after 2+ call occasions, with their last
-              attempt over a week ago, back into the shared call pool for anyone to call. Their
-              Apollo numbers are refreshed in the background so new numbers replace the old ones.
-              Contacts are not re-scored.
+              attempt over a week ago, back into the shared call pool for anyone to call.
+              Contacts are not re-enriched or re-scored.
             </p>
             {message && (
               <p className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 mt-1">
