@@ -172,6 +172,65 @@ describe("ImportPage", () => {
     });
   });
 
+  it("shows an input-CSV download button when the original upload is stored", async () => {
+    const batch = {
+      id: "b11",
+      user_id: "u1",
+      filename: "leads.csv",
+      total_rows: 50,
+      processed_rows: 50,
+      stored_rows: 30,
+      discarded_rows: 20,
+      enriched_rows: 0,
+      enrichment_error: null,
+      status: "completed",
+      has_input_csv: true,
+      has_filtered_csv: false,
+      has_discarded_csv: false,
+      created_at: "2026-04-20T00:00:00Z",
+    };
+    mockRecentImports([batch]);
+
+    render(<ImportPage />);
+    const downloadBtn = await screen.findByRole("button", { name: /Input CSV/i });
+    fireEvent.click(downloadBtn);
+
+    await waitFor(() => {
+      expect(mockApiDownload).toHaveBeenCalledWith(
+        "/imports/b11/input-csv",
+        "leads.input.csv",
+      );
+    });
+  });
+
+  it("hides the input-CSV button when no original upload is stored", async () => {
+    mockRecentImports([
+      {
+        id: "b12",
+        user_id: "u1",
+        filename: "old-import.csv",
+        total_rows: 10,
+        processed_rows: 10,
+        stored_rows: 10,
+        discarded_rows: 0,
+        enriched_rows: 0,
+        enrichment_error: null,
+        status: "completed",
+        has_input_csv: false,
+        has_filtered_csv: true,
+        has_discarded_csv: true,
+        created_at: "2026-04-20T00:00:00Z",
+      },
+    ]);
+
+    render(<ImportPage />);
+    await screen.findByText("old-import.csv");
+    expect(screen.queryByRole("button", { name: /Input CSV/i })).not.toBeInTheDocument();
+    // The other two exports are still offered.
+    expect(screen.getByRole("button", { name: /Filtered CSV/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Discarded CSV/i })).toBeInTheDocument();
+  });
+
   it("hides the download button when no filtered CSV is stored yet", async () => {
     const batch = {
       id: "b10",

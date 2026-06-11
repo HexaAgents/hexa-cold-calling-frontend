@@ -110,6 +110,7 @@ export interface ImportBatch {
   enriched_rows: number;
   enrichment_error: string | null;
   status: string;
+  has_input_csv: boolean;
   has_filtered_csv: boolean;
   has_discarded_csv: boolean;
   created_at: string | null;

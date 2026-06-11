@@ -92,6 +92,7 @@ function ImportContent() {
           enriched_rows: 0,
           enrichment_error: null,
           status: "processing",
+          has_input_csv: true,
           has_filtered_csv: false,
           has_discarded_csv: false,
           created_at: new Date().toISOString(),
@@ -187,7 +188,7 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
   const isFailed = batch.status === "failed";
   const isProcessing = batch.status === "processing";
   const enriched = batch.enriched_rows ?? 0;
-  const [downloadingKind, setDownloadingKind] = useState<"filtered" | "discarded" | null>(null);
+  const [downloadingKind, setDownloadingKind] = useState<"input" | "filtered" | "discarded" | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const fillClass = isFailed
@@ -196,7 +197,7 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
     ? "progress-fill-complete"
     : "progress-fill";
 
-  const handleDownload = async (kind: "filtered" | "discarded") => {
+  const handleDownload = async (kind: "input" | "filtered" | "discarded") => {
     setDownloadError(null);
     setDownloadingKind(kind);
     try {
@@ -235,6 +236,23 @@ function ImportRow({ batch }: { batch: ImportBatch }) {
               <AlertCircle size={10} />
               Failed
             </span>
+          )}
+          {batch.has_input_csv && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-xs"
+              onClick={() => handleDownload("input")}
+              disabled={downloadingKind !== null}
+              title="Download the original CSV exactly as it was uploaded"
+            >
+              {downloadingKind === "input" ? (
+                <Loader2 size={11} className="mr-1 animate-spin" />
+              ) : (
+                <Download size={11} className="mr-1" />
+              )}
+              Input CSV
+            </Button>
           )}
           {batch.has_filtered_csv && (
             <Button
