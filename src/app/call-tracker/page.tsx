@@ -1837,6 +1837,14 @@ function LocationCountsStrip({
         .slice(0, 6)
         .map((l) => ({ label: l.name, count: l.count }));
 
+  const callBuckets = counts.call_counts
+    ? [
+        { label: "Called 1×", count: counts.call_counts.once },
+        { label: "2×", count: counts.call_counts.twice },
+        { label: "3×+", count: counts.call_counts.three_plus },
+      ].filter((b) => b.count > 0)
+    : [];
+
   return (
     <div className="mb-4 border border-border bg-card px-3 py-2.5 sm:px-4">
       <div className="flex items-center gap-x-2 gap-y-1.5 flex-wrap text-xs">
@@ -1844,6 +1852,18 @@ function LocationCountsStrip({
           <MapPin size={12} />
           {counts.total.toLocaleString()} in pool
         </span>
+        {callBuckets.length > 0 && (
+          <>
+            <span className="text-muted-foreground/50">·</span>
+            {callBuckets.map((b) => (
+              <Badge key={b.label} variant="outline" className="text-xs gap-1 font-normal text-muted-foreground">
+                <PhoneCall size={10} />
+                {b.label}
+                <span className="font-mono font-semibold text-foreground">{b.count.toLocaleString()}</span>
+              </Badge>
+            ))}
+          </>
+        )}
         {chips.length > 0 && <span className="text-muted-foreground/50">·</span>}
         {chips.map((c) => (
           <Badge key={c.label} variant="secondary" className="text-xs gap-1 font-normal">

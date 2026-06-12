@@ -110,6 +110,12 @@ export interface LocationCounts {
   states: LocationCount[];
   cities: LocationCount[];
   no_location: number;
+  call_counts: {
+    never: number;
+    once: number;
+    twice: number;
+    three_plus: number;
+  };
 }
 
 export interface ImportBatch {

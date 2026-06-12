@@ -82,6 +82,7 @@ describe("CallTrackerPage", () => {
           states: [],
           cities: [{ name: "Berlin", count: 12 }],
           no_location: 0,
+          call_counts: { never: 30, once: 7, twice: 4, three_plus: 1 },
         };
       }
       if (path === "/settings") {
@@ -136,6 +137,12 @@ describe("CallTrackerPage", () => {
     // Pool total plus the top locations (no filters selected -> countries).
     expect(screen.getByText("42 in pool")).toBeInTheDocument();
     expect(screen.getAllByText("DE").length).toBeGreaterThan(0);
+
+    // Times-called buckets next to the pool total.
+    expect(screen.getByText("Called 1×")).toBeInTheDocument();
+    expect(screen.getByText("2×")).toBeInTheDocument();
+    expect(screen.getByText("3×+")).toBeInTheDocument();
+    expect(screen.getByText("7")).toBeInTheDocument();
   });
 
   it("shows callback date input when Didn't Pick Up is selected", async () => {
