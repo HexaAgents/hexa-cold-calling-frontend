@@ -16,7 +16,7 @@ This directory contains the Vitest and React Testing Library tests for the Next.
 - `components/app-shell.test.tsx`: responsive shell chrome — main content rendering, mobile header title, and drawer open/close via hamburger, close button, and overlay.
 - `components/app-sidebar.test.tsx`: sidebar navigation, active route state, sign out behavior, and current-user display.
 - `components/hexa-logo.test.tsx`: logo accessibility and optional wordmark rendering.
-- `components/call-tracker.test.tsx`: call queue display, call actions, prompt states, and route-level behavior around the calling workflow.
+- `components/call-tracker.test.tsx`: call queue display, call actions, prompt states, route-level behavior around the calling workflow, and company flags — warning banner rendering for flagged companies, flag dialog with suggested/custom reasons and details, save-disabled-until-reason, PUT/DELETE payloads, and banner removal.
 - `components/import-page.test.tsx`: CSV upload states, import status polling, retry/download affordances, and backend payload expectations.
 - `components/productivity-page.test.tsx`: productivity filters, summary cards, and breakdown rendering.
 - `components/settings-form.test.tsx`: settings loading, editing, save payloads, and error handling.

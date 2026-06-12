@@ -72,7 +72,7 @@ Responsive conventions:
 The test suite focuses on user-visible behavior and API payload contracts rather than implementation details.
 
 - Auth and navigation: login, auth-guarded pages, sidebar active state, app-shell drawer behavior, and logo accessibility.
-- Calling workflow: call tracker queue behavior, claim/session state, and UI actions around call outcomes.
+- Calling workflow: call tracker queue behavior, claim/session state, UI actions around call outcomes, and company flags (flag a company with a suggested or custom reason; a warning banner appears whenever any contact from that company comes up, without removing it from the pool).
 - Imports and reporting: CSV import page states and productivity table/summary rendering.
 - Settings: settings form rendering, editing, and submission behavior.
 - To-do list: table columns, due-date sorting, multi-assignee pills, assigner/assignee permissions, task creation payloads, detail-page editing rules, overdue warnings, and muted amber overdue styling.

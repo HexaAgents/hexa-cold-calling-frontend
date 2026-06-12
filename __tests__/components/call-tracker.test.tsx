@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import CallTrackerPage from "@/app/call-tracker/page";
 import { apiFetch } from "@/lib/api";
 
@@ -408,6 +408,188 @@ describe("CallTrackerPage", () => {
       expect(posts.length).toBe(2);
       expect(JSON.parse(posts[1][1]!.body as string).outcome).toBe("interested");
     });
+  });
+
+  const MOCK_FLAG = {
+    id: "f-1",
+    company_name: "ACME Corp",
+    reason: "Already has an AI provider",
+    details: "Mentioned on a call in June",
+    flagged_by: "u-1",
+    flagged_by_name: "Sam Caller",
+    created_at: "2026-06-12T00:00:00+00:00",
+    updated_at: "2026-06-12T00:00:00+00:00",
+  };
+
+  async function startCalling() {
+    render(<CallTrackerPage />);
+    await waitFor(() => expect(screen.getByText("Start Calling")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Start Calling"));
+    await waitFor(() => expect(screen.getByText("Jane Doe")).toBeInTheDocument());
+  }
+
+  it("shows a prominent warning banner when the contact's company is flagged", async () => {
+    setupDefaultMocks();
+    const baseImpl = mockApiFetch.getMockImplementation()!;
+    mockApiFetch.mockImplementation(async (path: string, options?: RequestInit) => {
+      if (path.startsWith("/companies/flag")) return MOCK_FLAG;
+      return baseImpl(path, options);
+    });
+
+    await startCalling();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Company flagged: Already has an AI provider/)).toBeInTheDocument();
+    });
+    expect(screen.getByText("Mentioned on a call in June")).toBeInTheDocument();
+    expect(screen.getByText(/Flagged by Sam Caller/)).toBeInTheDocument();
+
+    // The flag is queried for the displayed contact's company.
+    expect(
+      mockApiFetch.mock.calls.some(
+        ([p]) => typeof p === "string" && p === "/companies/flag?company_name=ACME%20Corp"
+      )
+    ).toBe(true);
+
+    // Flagged companies show Edit/Remove instead of the flag button.
+    expect(screen.getByText("Edit")).toBeInTheDocument();
+    expect(screen.getByText("Remove")).toBeInTheDocument();
+    expect(screen.queryByText("Flag company")).not.toBeInTheDocument();
+  });
+
+  it("flags a company with a suggested reason via the dialog", async () => {
+    setupDefaultMocks();
+    const baseImpl = mockApiFetch.getMockImplementation()!;
+    mockApiFetch.mockImplementation(async (path: string, options?: RequestInit) => {
+      if (path === "/companies/flag" && options?.method === "PUT") {
+        const body = JSON.parse(options.body as string);
+        return { ...MOCK_FLAG, reason: body.reason, details: body.details };
+      }
+      if (path.startsWith("/companies/flag")) return null;
+      return baseImpl(path, options);
+    });
+
+    await startCalling();
+
+    // No banner yet; open the flag dialog.
+    expect(screen.queryByText(/Company flagged:/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Flag company"));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Flag ACME Corp")).toBeInTheDocument();
+    // Flagging must be explicitly described as not affecting the pool.
+    expect(within(dialog).getByText(/doesn't remove contacts from the calling pool/)).toBeInTheDocument();
+
+    // All suggested reasons are offered.
+    for (const reason of [
+      "Already has an AI provider",
+      "Too large for us to service",
+      "Existing customer or partner",
+      "Asked not to be contacted",
+    ]) {
+      expect(within(dialog).getByText(reason)).toBeInTheDocument();
+    }
+
+    fireEvent.click(within(dialog).getByText("Too large for us to service"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Flag company" }));
+
+    await waitFor(() => {
+      const puts = mockApiFetch.mock.calls.filter(
+        ([p, o]) => p === "/companies/flag" && o?.method === "PUT"
+      );
+      expect(puts.length).toBe(1);
+      const body = JSON.parse(puts[0][1]!.body as string);
+      expect(body.company_name).toBe("ACME Corp");
+      expect(body.reason).toBe("Too large for us to service");
+      expect(body.details).toBeNull();
+    });
+
+    // Banner appears immediately after saving.
+    await waitFor(() => {
+      expect(screen.getByText(/Company flagged: Too large for us to service/)).toBeInTheDocument();
+    });
+  });
+
+  it("flags a company with a custom reason and details", async () => {
+    setupDefaultMocks();
+    const baseImpl = mockApiFetch.getMockImplementation()!;
+    mockApiFetch.mockImplementation(async (path: string, options?: RequestInit) => {
+      if (path === "/companies/flag" && options?.method === "PUT") {
+        const body = JSON.parse(options.body as string);
+        return { ...MOCK_FLAG, reason: body.reason, details: body.details };
+      }
+      if (path.startsWith("/companies/flag")) return null;
+      return baseImpl(path, options);
+    });
+
+    await startCalling();
+    fireEvent.click(screen.getByText("Flag company"));
+    const dialog = await screen.findByRole("dialog");
+
+    fireEvent.change(within(dialog).getByLabelText("Or a custom reason"), {
+      target: { value: "Under contract with a competitor" },
+    });
+    fireEvent.change(within(dialog).getByLabelText("Details (optional)"), {
+      target: { value: "Locked in until 2027" },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Flag company" }));
+
+    await waitFor(() => {
+      const puts = mockApiFetch.mock.calls.filter(
+        ([p, o]) => p === "/companies/flag" && o?.method === "PUT"
+      );
+      expect(puts.length).toBe(1);
+      const body = JSON.parse(puts[0][1]!.body as string);
+      expect(body.reason).toBe("Under contract with a competitor");
+      expect(body.details).toBe("Locked in until 2027");
+    });
+  });
+
+  it("disables saving a flag until a reason is chosen", async () => {
+    setupDefaultMocks();
+    await startCalling();
+
+    fireEvent.click(screen.getByText("Flag company"));
+    const dialog = await screen.findByRole("dialog");
+
+    const save = within(dialog).getByRole("button", { name: "Flag company" });
+    expect(save).toBeDisabled();
+
+    fireEvent.click(within(dialog).getByText("Already has an AI provider"));
+    expect(save).not.toBeDisabled();
+  });
+
+  it("removes a flag from the banner", async () => {
+    setupDefaultMocks();
+    const baseImpl = mockApiFetch.getMockImplementation()!;
+    mockApiFetch.mockImplementation(async (path: string, options?: RequestInit) => {
+      if (path.startsWith("/companies/flag") && options?.method === "DELETE") {
+        return { detail: "Flag removed" };
+      }
+      if (path.startsWith("/companies/flag")) return MOCK_FLAG;
+      return baseImpl(path, options);
+    });
+
+    await startCalling();
+    await waitFor(() => {
+      expect(screen.getByText(/Company flagged:/)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Remove"));
+
+    await waitFor(() => {
+      expect(
+        mockApiFetch.mock.calls.some(
+          ([p, o]) =>
+            p === "/companies/flag?company_name=ACME%20Corp" && o?.method === "DELETE"
+        )
+      ).toBe(true);
+    });
+    await waitFor(() => {
+      expect(screen.queryByText(/Company flagged:/)).not.toBeInTheDocument();
+    });
+    // The flag affordance returns once the flag is gone.
+    expect(screen.getByText("Flag company")).toBeInTheDocument();
   });
 
   it("includes callback_date in the API call body", async () => {

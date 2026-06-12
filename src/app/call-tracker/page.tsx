@@ -59,8 +59,16 @@ import {
   CalendarClock,
   Mail,
   MapPin,
+  Flag,
 } from "lucide-react";
-import type { Contact, Note, CallLog, CallLogResponse, CallLogDeleteResponse, EmailLog, LocationCounts, Settings, User } from "@/types";
+import type { CompanyFlag, Contact, Note, CallLog, CallLogResponse, CallLogDeleteResponse, EmailLog, LocationCounts, Settings, User } from "@/types";
+
+const FLAG_REASONS = [
+  "Already has an AI provider",
+  "Too large for us to service",
+  "Existing customer or partner",
+  "Asked not to be contacted",
+];
 
 const CLAIM_TIMEOUT_MS = 10 * 60 * 60 * 1000;
 import { todayLocalISO, formatLocalDate } from "@/lib/utils";
@@ -147,6 +155,14 @@ function CallTracker({ user }: { user: User }) {
   const [outsideBusinessHours, setOutsideBusinessHours] = useState(false);
   const [claimedAt, setClaimedAt] = useState<number | null>(null);
   const [claimExpired, setClaimExpired] = useState(false);
+
+  // Company flag warning (informational only — never affects the queue).
+  const [companyFlag, setCompanyFlag] = useState<CompanyFlag | null>(null);
+  const [flagDialogOpen, setFlagDialogOpen] = useState(false);
+  const [flagReason, setFlagReason] = useState("");
+  const [flagCustomReason, setFlagCustomReason] = useState("");
+  const [flagDetails, setFlagDetails] = useState("");
+  const [flagSaving, setFlagSaving] = useState(false);
 
   // When a contact hits the "give up after N failed pickups" threshold the
   // backend silences it (clears retry_at) so it drops out of the call
@@ -310,6 +326,7 @@ function CallTracker({ user }: { user: User }) {
       setOutcomeUnlocked(false);
       setNewNote("");
       setEditingNote(null);
+      setCompanyFlag(null);
       queueMicrotask(() => {
         if (displayContact.call_outcome === "didnt_pick_up" && displayContact.retry_at) {
           setCallbackDate(displayContact.retry_at.slice(0, 10));
@@ -321,15 +338,21 @@ function CallTracker({ user }: { user: User }) {
 
     let cancelled = false;
     (async () => {
-      const [n, c, e] = await Promise.all([
+      const [n, c, e, f] = await Promise.all([
         apiFetch<Note[]>(`/contacts/${displayContactId}/notes`).catch(() => []),
         apiFetch<CallLog[]>(`/calls/contact/${displayContactId}`).catch(() => []),
         apiFetch<EmailLog[]>(`/email/logs/${displayContactId}`).catch(() => []),
+        displayContact.company_name
+          ? apiFetch<CompanyFlag | null>(
+              `/companies/flag?company_name=${encodeURIComponent(displayContact.company_name)}`
+            ).catch(() => null)
+          : Promise.resolve(null),
       ]);
       if (cancelled) return;
       setNotes(n);
       setCalls(c);
       setEmailLogs(e);
+      setCompanyFlag(f && f.id ? f : null);
     })();
     return () => {
       cancelled = true;
@@ -358,6 +381,57 @@ function CallTracker({ user }: { user: User }) {
     const interval = setInterval(checkBusinessHours, 30_000);
     return () => clearInterval(interval);
   }, [displayContactId, displayContact?.timezone, displayContact?.call_outcome]);
+
+  const openFlagDialog = () => {
+    if (companyFlag) {
+      const isSuggested = FLAG_REASONS.includes(companyFlag.reason);
+      setFlagReason(isSuggested ? companyFlag.reason : "");
+      setFlagCustomReason(isSuggested ? "" : companyFlag.reason);
+      setFlagDetails(companyFlag.details || "");
+    } else {
+      setFlagReason("");
+      setFlagCustomReason("");
+      setFlagDetails("");
+    }
+    setFlagDialogOpen(true);
+  };
+
+  const handleSaveFlag = async () => {
+    if (!displayContact?.company_name) return;
+    const reason = flagCustomReason.trim() || flagReason;
+    if (!reason) return;
+    setFlagSaving(true);
+    try {
+      const flag = await apiFetch<CompanyFlag>("/companies/flag", {
+        method: "PUT",
+        body: JSON.stringify({
+          company_name: displayContact.company_name,
+          reason,
+          details: flagDetails.trim() || null,
+        }),
+      });
+      setCompanyFlag(flag);
+      setFlagDialogOpen(false);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setFlagSaving(false);
+    }
+  };
+
+  const handleRemoveFlag = async () => {
+    if (!displayContact?.company_name) return;
+    try {
+      await apiFetch(
+        `/companies/flag?company_name=${encodeURIComponent(displayContact.company_name)}`,
+        { method: "DELETE" }
+      );
+      setCompanyFlag(null);
+      setFlagDialogOpen(false);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const handleBack = () => {
     if (!canGoBack) return;
@@ -1035,6 +1109,46 @@ function CallTracker({ user }: { user: User }) {
         </div>
       )}
 
+      {companyFlag && (
+        <div className="mb-5 flex items-start gap-3 border border-amber-500/50 border-l-4 border-l-amber-500 bg-amber-50 dark:bg-amber-950/30 p-4">
+          <div className="h-9 w-9 bg-amber-500/15 flex items-center justify-center shrink-0">
+            <Flag size={16} className="text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+              Company flagged: {companyFlag.reason}
+            </p>
+            {companyFlag.details && (
+              <p className="text-xs text-amber-800/90 dark:text-amber-300/80 mt-0.5">
+                {companyFlag.details}
+              </p>
+            )}
+            <p className="text-xs text-amber-700/70 dark:text-amber-400/60 mt-1">
+              Flagged by {companyFlag.flagged_by_name || "a teammate"}
+              {companyFlag.created_at ? ` · ${formatLocalDate(companyFlag.created_at)}` : ""}
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-amber-800 dark:text-amber-300 hover:bg-amber-500/15"
+              onClick={openFlagDialog}
+            >
+              Edit
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-amber-800 dark:text-amber-300 hover:bg-amber-500/15"
+              onClick={handleRemoveFlag}
+            >
+              Remove
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className={`space-y-6 ${claimExpired || isDisabledByHours ? "opacity-50 pointer-events-none select-none" : ""}`}>
         {/* Contact Card */}
         <div className="border border-border bg-card p-4 sm:p-6">
@@ -1077,6 +1191,18 @@ function CallTracker({ user }: { user: User }) {
                 <Badge variant="secondary" className="mt-1">
                   {displayContact.industry_tag}
                 </Badge>
+              )}
+              {!companyFlag && (
+                <div className="mt-1.5">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs text-muted-foreground hover:text-amber-700 dark:hover:text-amber-400"
+                    onClick={openFlagDialog}
+                  >
+                    <Flag size={11} className="mr-1" /> Flag company
+                  </Button>
+                </div>
               )}
             </div>
           </div>
@@ -1589,6 +1715,78 @@ function CallTracker({ user }: { user: User }) {
       </Dialog>
 
       {/* Schedule Follow-up Call Dialog — appears after interested outcome */}
+      <Dialog open={flagDialogOpen} onOpenChange={setFlagDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Flag size={15} className="text-amber-600 dark:text-amber-400" />
+              Flag {displayContact?.company_name || "company"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Flagging doesn&apos;t remove contacts from the calling pool — it shows a warning
+            whenever someone from this company comes up on the call tracker.
+          </p>
+          <div className="space-y-1.5">
+            {FLAG_REASONS.map((r) => {
+              const selected = flagReason === r && !flagCustomReason.trim();
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => {
+                    setFlagReason(r);
+                    setFlagCustomReason("");
+                  }}
+                  className={`w-full flex items-center justify-between border px-3 py-2 text-sm text-left transition-colors ${
+                    selected
+                      ? "border-amber-500 bg-amber-50 dark:bg-amber-950/30"
+                      : "border-border hover:bg-muted"
+                  }`}
+                >
+                  {r}
+                  {selected && <Check size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="flag-custom-reason" className="text-xs">
+              Or a custom reason
+            </Label>
+            <Input
+              id="flag-custom-reason"
+              value={flagCustomReason}
+              onChange={(e) => setFlagCustomReason(e.target.value)}
+              placeholder="e.g. Under contract with a competitor until 2027"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="flag-details" className="text-xs">
+              Details (optional)
+            </Label>
+            <Textarea
+              id="flag-details"
+              value={flagDetails}
+              onChange={(e) => setFlagDetails(e.target.value)}
+              rows={2}
+              placeholder="Anything callers should know before dialing"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFlagDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveFlag}
+              disabled={flagSaving || !(flagCustomReason.trim() || flagReason)}
+            >
+              {flagSaving ? "Saving..." : companyFlag ? "Update flag" : "Flag company"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={scheduleDialogOpen} onOpenChange={setScheduleDialogOpen}>
         <DialogContent>
           <DialogHeader>

@@ -99,6 +99,17 @@ export interface EmailLog {
   sent_at: string;
 }
 
+export interface CompanyFlag {
+  id: string;
+  company_name: string;
+  reason: string;
+  details: string | null;
+  flagged_by: string | null;
+  flagged_by_name: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export interface LocationCount {
   name: string;
   count: number;
