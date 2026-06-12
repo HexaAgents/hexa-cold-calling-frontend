@@ -15,6 +15,16 @@ export function todayLocalISO(): string {
 }
 
 /**
+ * Get the upcoming Sunday (end of the current week) as YYYY-MM-DD in the
+ * user's local timezone. If today is Sunday, returns today.
+ */
+export function upcomingSundayLocalISO(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + ((7 - d.getDay()) % 7));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
  * Format a date-like value (ISO string or YYYY-MM-DD) for display,
  * avoiding UTC-to-local shifts that cause off-by-one day errors.
  * Parses at noon local time so timezone offsets never push to an adjacent day.

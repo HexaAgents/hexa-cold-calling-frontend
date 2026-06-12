@@ -20,10 +20,11 @@ This directory contains the Vitest and React Testing Library tests for the Next.
 - `components/import-page.test.tsx`: CSV upload states, import status polling, retry/download affordances, and backend payload expectations.
 - `components/productivity-page.test.tsx`: productivity filters, summary cards, and breakdown rendering.
 - `components/settings-form.test.tsx`: settings loading, editing, save payloads, and error handling.
-- `components/todo-list-page.test.tsx`: to-do table columns, sorting, assignee pills, person filter availability, assigner/assignee controls, task creation, overdue state, and muted amber overdue styling.
+- `components/todo-list-page.test.tsx`: to-do table columns, sorting, assignee pills, person filter availability, assigner/assignee controls, task creation (including the due date defaulting to the upcoming Sunday and being clearable), overdue state, and muted amber overdue styling.
 - `components/todo-list.test.tsx`: multi-assignee rendering and row navigation for the to-do list.
 - `components/todo-detail-page.test.tsx`: task detail rendering, assigner-only delete behavior, assignee edit behavior, multi-assignee permissions, and overdue warnings.
 - `lib/todo-assignees.test.ts`: canonical multi-assignee helpers, legacy field fallback, and payload construction.
+- `lib/utils.test.ts`: date helpers — `upcomingSundayLocalISO` across weekdays, Sunday-today, and month/year boundaries.
 
 ## What to Add When Features Change
 

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import TodoListPage from "@/app/todo-list/page";
 import { apiFetch } from "@/lib/api";
+import { upcomingSundayLocalISO } from "@/lib/utils";
 import type { Todo, TodoAssignee } from "@/types";
 
 const mockApiFetch = vi.mocked(apiFetch);
@@ -246,12 +247,18 @@ describe("TodoListPage", () => {
     expect(screen.queryAllByLabelText('Delete "Assigned to me"')).toHaveLength(0);
   });
 
-  it("creates a task with only a title", async () => {
+  it("creates a task with only a title, due date defaulting to the upcoming Sunday", async () => {
     mockData([makeTodo({})]);
     render(<TodoListPage />);
     await waitFor(() => expect(screen.getByText("New task")).toBeInTheDocument());
 
     fireEvent.click(screen.getByText("New task"));
+
+    // The due date input is pre-filled with the end of the week (next Sunday).
+    const dueInput = screen.getByLabelText(/Due date/) as HTMLInputElement;
+    expect(dueInput.value).toBe(upcomingSundayLocalISO());
+    expect(new Date(`${dueInput.value}T12:00:00`).getDay()).toBe(0);
+
     fireEvent.change(screen.getByLabelText(/^Task/), { target: { value: "Brand new task" } });
     fireEvent.click(screen.getByText("Create task"));
 
@@ -267,6 +274,29 @@ describe("TodoListPage", () => {
     const body = JSON.parse((postCall![1] as RequestInit).body as string);
     expect(body.title).toBe("Brand new task");
     expect(body.description).toBeNull();
+    expect(body.due_date).toBe(upcomingSundayLocalISO());
+  });
+
+  it("allows clearing the default due date to create a task with none", async () => {
+    mockData([makeTodo({})]);
+    render(<TodoListPage />);
+    await waitFor(() => expect(screen.getByText("New task")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText("New task"));
+    fireEvent.change(screen.getByLabelText(/^Task/), { target: { value: "No deadline" } });
+    fireEvent.change(screen.getByLabelText(/Due date/), { target: { value: "" } });
+    fireEvent.click(screen.getByText("Create task"));
+
+    await waitFor(() => {
+      expect(mockApiFetch).toHaveBeenCalledWith(
+        "/todos",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+    const postCall = mockApiFetch.mock.calls.find(
+      ([p, o]) => p === "/todos" && (o as RequestInit)?.method === "POST",
+    );
+    const body = JSON.parse((postCall![1] as RequestInit).body as string);
     expect(body.due_date).toBeNull();
   });
 

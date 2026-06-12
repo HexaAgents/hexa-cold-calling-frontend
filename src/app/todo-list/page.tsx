@@ -29,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { assigneePayload, getTodoAssignees, isTodoAssignedTo } from "@/lib/todo-assignees";
+import { upcomingSundayLocalISO } from "@/lib/utils";
 import { getPersonPillClasses, getPersonDotClasses } from "@/lib/todo-colors";
 import { ListTodo, Plus, Trash2, AlertTriangle, X, CalendarDays, Filter, Check, Pencil, ChevronDown } from "lucide-react";
 import type { Todo, TodoAssignee, User } from "@/types";
@@ -780,7 +781,8 @@ function CreateTaskModal({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
-  const [dueDate, setDueDate] = useState("");
+  // Default the due date to the end of the week (upcoming Sunday).
+  const [dueDate, setDueDate] = useState(upcomingSundayLocalISO);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
