@@ -58,8 +58,9 @@ import {
   CalendarDays,
   CalendarClock,
   Mail,
+  MapPin,
 } from "lucide-react";
-import type { Contact, Note, CallLog, CallLogResponse, CallLogDeleteResponse, EmailLog, Settings, User } from "@/types";
+import type { Contact, Note, CallLog, CallLogResponse, CallLogDeleteResponse, EmailLog, LocationCounts, Settings, User } from "@/types";
 
 const CLAIM_TIMEOUT_MS = 10 * 60 * 60 * 1000;
 import { todayLocalISO, formatLocalDate } from "@/lib/utils";
@@ -125,6 +126,7 @@ function CallTracker({ user }: { user: User }) {
 
   const [locations, setLocations] = useState<LocationOptions>({ cities: [], states: [], countries: [] });
   const [loadingLocations, setLoadingLocations] = useState(true);
+  const [locationCounts, setLocationCounts] = useState<LocationCounts | null>(null);
   const [retryDays, setRetryDays] = useState(3);
 
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
@@ -160,18 +162,25 @@ function CallTracker({ user }: { user: User }) {
   const canGoBack =
     historyIndex === null ? sessionHistory.length > 0 : historyIndex < sessionHistory.length - 1;
 
+  const refreshLocationCounts = useCallback(() => {
+    apiFetch<LocationCounts>("/contacts/location-counts")
+      .then(setLocationCounts)
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     apiFetch<LocationOptions>("/contacts/locations")
       .then(setLocations)
       .catch(() => {})
       .finally(() => setLoadingLocations(false));
+    refreshLocationCounts();
     apiFetch<Settings>("/settings")
       .then((s) => setRetryDays(s.retry_days))
       .catch(() => {});
     apiFetch<{ connected: boolean }>("/email/oauth/status")
       .then((s) => setGmailConnected(s.connected))
       .catch(() => {});
-  }, []);
+  }, [refreshLocationCounts]);
 
   useEffect(() => {
     if (sessionHistory.length === 0) return;
@@ -252,10 +261,12 @@ function CallTracker({ user }: { user: User }) {
       setQueueEmpty(true);
     } finally {
       setLoading(false);
+      refreshLocationCounts();
     }
   }, [
     buildFilterQuery,
     contact,
+    refreshLocationCounts,
     setCallbackDate,
     setCallbackDateSaved,
     setCalls,
@@ -863,9 +874,17 @@ function CallTracker({ user }: { user: User }) {
 
   if ((queueEmpty || !contact) && !isViewingHistory) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-4">
+      <div className="flex flex-col items-center justify-center h-full gap-4 p-4">
         <p className="text-muted-foreground">No more contacts to call right now.</p>
         <p className="text-sm text-muted-foreground">All contacts have been called or are claimed by other users.</p>
+        <div className="w-full max-w-md">
+          <LocationCountsStrip
+            counts={locationCounts}
+            selectedCountries={filterCountries}
+            selectedStates={filterStates}
+            selectedCities={filterCities}
+          />
+        </div>
         <div className="flex gap-3">
           <Button variant="outline" onClick={claimNext}>
             Check again
@@ -917,6 +936,14 @@ function CallTracker({ user }: { user: User }) {
           </>
         )}
       </div>
+
+      {/* Contacts remaining per location */}
+      <LocationCountsStrip
+        counts={locationCounts}
+        selectedCountries={filterCountries}
+        selectedStates={filterStates}
+        selectedCities={filterCities}
+      />
 
       {/* Session history tags */}
       {(sessionHistory.length > 0 || contact) && (
@@ -1776,6 +1803,61 @@ function LocalTime({ timezone }: { timezone: string }) {
     <span className={inBusinessHours ? "text-green-600 dark:text-green-400" : undefined}>
       {formatted} local
     </span>
+  );
+}
+
+function LocationCountsStrip({
+  counts,
+  selectedCountries,
+  selectedStates,
+  selectedCities,
+}: {
+  counts: LocationCounts | null;
+  selectedCountries: string[];
+  selectedStates: string[];
+  selectedCities: string[];
+}) {
+  if (!counts || typeof counts.total !== "number") return null;
+
+  const findCount = (list: { name: string; count: number }[], name: string) =>
+    list.find((l) => l.name === name)?.count ?? 0;
+
+  const hasLocationFilter =
+    selectedCountries.length + selectedStates.length + selectedCities.length > 0;
+
+  // With filters active, show the user exactly how many contacts remain in
+  // each location they picked. Without filters, surface the biggest pools.
+  const chips = hasLocationFilter
+    ? [
+        ...selectedCountries.map((v) => ({ label: v, count: findCount(counts.countries, v) })),
+        ...selectedStates.map((v) => ({ label: v, count: findCount(counts.states, v) })),
+        ...selectedCities.map((v) => ({ label: v, count: findCount(counts.cities, v) })),
+      ]
+    : (counts.states.length > 0 ? counts.states : counts.countries)
+        .slice(0, 6)
+        .map((l) => ({ label: l.name, count: l.count }));
+
+  return (
+    <div className="mb-4 border border-border bg-card px-3 py-2.5 sm:px-4">
+      <div className="flex items-center gap-x-2 gap-y-1.5 flex-wrap text-xs">
+        <span className="flex items-center gap-1 font-medium text-muted-foreground shrink-0">
+          <MapPin size={12} />
+          {counts.total.toLocaleString()} in pool
+        </span>
+        {chips.length > 0 && <span className="text-muted-foreground/50">·</span>}
+        {chips.map((c) => (
+          <Badge key={c.label} variant="secondary" className="text-xs gap-1 font-normal">
+            {c.label}
+            <span className="font-mono font-semibold">{c.count.toLocaleString()}</span>
+          </Badge>
+        ))}
+        {counts.no_location > 0 && (
+          <span className="text-muted-foreground">
+            No location: {counts.no_location.toLocaleString()}
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
 

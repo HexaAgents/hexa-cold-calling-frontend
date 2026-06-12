@@ -99,6 +99,19 @@ export interface EmailLog {
   sent_at: string;
 }
 
+export interface LocationCount {
+  name: string;
+  count: number;
+}
+
+export interface LocationCounts {
+  total: number;
+  countries: LocationCount[];
+  states: LocationCount[];
+  cities: LocationCount[];
+  no_location: number;
+}
+
 export interface ImportBatch {
   id: string;
   user_id: string;

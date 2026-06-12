@@ -75,6 +75,15 @@ describe("CallTrackerPage", () => {
       if (path === "/contacts/locations") {
         return { cities: ["Berlin"], states: [], countries: ["DE"] };
       }
+      if (path === "/contacts/location-counts") {
+        return {
+          total: 42,
+          countries: [{ name: "DE", count: 42 }],
+          states: [],
+          cities: [{ name: "Berlin", count: 12 }],
+          no_location: 0,
+        };
+      }
       if (path === "/settings") {
         return MOCK_SETTINGS;
       }
@@ -109,6 +118,25 @@ describe("CallTrackerPage", () => {
       return {};
     });
   }
+
+  it("shows contact counts per location while calling", async () => {
+    setupDefaultMocks();
+    render(<CallTrackerPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Start Calling")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("Start Calling"));
+
+    await waitFor(() => {
+      expect(screen.getByText("Jane Doe")).toBeInTheDocument();
+    });
+
+    // Pool total plus the top locations (no filters selected -> countries).
+    expect(screen.getByText("42 in pool")).toBeInTheDocument();
+    expect(screen.getAllByText("DE").length).toBeGreaterThan(0);
+  });
 
   it("shows callback date input when Didn't Pick Up is selected", async () => {
     setupDefaultMocks();
