@@ -29,9 +29,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { assigneePayload, getTodoAssignees, isTodoAssignedTo } from "@/lib/todo-assignees";
+import { RecurrencePicker, RecurrenceBadge, type RecurrenceValue } from "@/components/todo/todo-recurrence";
+import { EstimateBadge, ActualHoursDialog } from "@/components/todo/todo-estimate";
 import { upcomingSundayLocalISO } from "@/lib/utils";
 import { getPersonPillClasses, getPersonDotClasses } from "@/lib/todo-colors";
-import { ListTodo, Plus, Trash2, AlertTriangle, X, CalendarDays, Filter, Check, Pencil, ChevronDown } from "lucide-react";
+import { ListTodo, Plus, Trash2, AlertTriangle, X, CalendarDays, Filter, Check, Pencil, ChevronDown, Search } from "lucide-react";
 import type { Todo, TodoAssignee, User } from "@/types";
 
 type TodoSection = "upcoming" | "overdue" | "complete";
@@ -178,6 +180,7 @@ function InlineTitleEditor({
       >
         {todo.title}
       </span>
+      <RecurrenceBadge todo={todo} />
       {backlogged && (
         <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full border border-rose-300/30 bg-rose-500/8 px-2 py-0.5 text-[10px] font-medium text-rose-600/90 ring-1 ring-inset ring-rose-400/10 dark:text-rose-300/90">
           <AlertTriangle size={10} /> Overdue
@@ -366,8 +369,17 @@ function TodoListContent({ user }: { user: User }) {
   const [assignees, setAssignees] = useState<TodoAssignee[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
   const [section, setSection] = useState<TodoSection>("upcoming");
   const [showCreate, setShowCreate] = useState(false);
+  const [hoursPromptTodo, setHoursPromptTodo] = useState<Todo | null>(null);
+  // Bounded post-create refetch timers so fresh AI estimates appear without
+  // user action. Two fixed timeouts — never an open-ended polling loop.
+  const estimateRefetchTimers = useRef<number[]>([]);
+  useEffect(() => {
+    const timers = estimateRefetchTimers.current;
+    return () => timers.forEach((t) => window.clearTimeout(t));
+  }, []);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -398,10 +410,22 @@ function TodoListContent({ user }: { user: User }) {
   }, [fetchTodos]);
 
   const personFiltered = useMemo(() => {
-    if (filter === "all") return todos;
-    if (filter === "unassigned") return todos.filter((t) => getTodoAssignees(t).length === 0);
-    return todos.filter((t) => getTodoAssignees(t).some((assignee) => assignee.id === filter));
-  }, [todos, filter]);
+    let result = todos;
+    if (filter === "unassigned") {
+      result = result.filter((t) => getTodoAssignees(t).length === 0);
+    } else if (filter !== "all") {
+      result = result.filter((t) => getTodoAssignees(t).some((assignee) => assignee.id === filter));
+    }
+    const query = search.trim().toLowerCase();
+    if (query) {
+      result = result.filter(
+        (t) =>
+          t.title.toLowerCase().includes(query) ||
+          (t.description ?? "").toLowerCase().includes(query),
+      );
+    }
+    return result;
+  }, [todos, filter, search]);
 
   const sectionCounts = useMemo(
     () => ({
@@ -428,11 +452,20 @@ function TodoListContent({ user }: { user: User }) {
 
   const handleToggleDone = async (todo: Todo) => {
     try {
+      const markingDone = !todo.is_done;
       const updated = await apiFetch<Todo>(`/todos/${todo.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ is_done: !todo.is_done }),
+        body: JSON.stringify({ is_done: markingDone }),
       });
       setTodos((prev) => sortTodos(prev.map((t) => (t.id === todo.id ? updated : t))));
+      // Completing a recurring task creates its next occurrence server-side;
+      // refetch so it shows up right away.
+      if (markingDone && todo.recurrence_interval) {
+        void fetchTodos();
+      }
+      // The task is already done; the dialog only collects (optional) actual
+      // hours to calibrate future AI estimates.
+      if (markingDone) setHoursPromptTodo(updated);
     } catch (err) {
       console.error(err);
     }
@@ -501,7 +534,28 @@ function TodoListContent({ user }: { user: User }) {
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="relative w-full sm:w-56">
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search tasks..."
+              aria-label="Search tasks by name or description"
+              className="h-9 rounded-xl border-border/80 bg-card/80 pl-9 pr-8 shadow-sm backdrop-blur [&::-webkit-search-cancel-button]:hidden"
+            />
+            {search && (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={() => setSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
           <Select value={filter} onValueChange={setFilter}>
             <SelectTrigger className="h-9 w-42 gap-2 rounded-xl border-border/80 bg-card/80 pl-3 shadow-sm backdrop-blur hover:bg-accent/50">
               <Filter size={14} className="text-muted-foreground" />
@@ -570,12 +624,18 @@ function TodoListContent({ user }: { user: User }) {
             <ListTodo size={24} />
           </div>
           <h3 className="text-sm font-semibold">
-            {section === "upcoming" ? "No tasks yet" : `No ${SECTION_META[section].label.toLowerCase()} tasks`}
+            {search.trim()
+              ? "No matching tasks"
+              : section === "upcoming"
+                ? "No tasks yet"
+                : `No ${SECTION_META[section].label.toLowerCase()} tasks`}
           </h3>
           <p className="mt-1 max-w-md text-sm text-muted-foreground">
-            {filter === "all"
-              ? SECTION_META[section].emptyText
-              : "Try another person filter or switch sections to find more tasks."}
+            {search.trim()
+              ? `No tasks match "${search.trim()}". Try a different search or clear it.`
+              : filter === "all"
+                ? SECTION_META[section].emptyText
+                : "Try another person filter or switch sections to find more tasks."}
           </p>
           <Button size="sm" className="mt-5 gap-1.5" onClick={() => setShowCreate(true)}>
             <Plus size={15} /> New task
@@ -632,6 +692,7 @@ function TodoListContent({ user }: { user: User }) {
                   )}
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-[32px]">
+                  <RecurrenceBadge todo={todo} />
                   <AssigneePills todo={todo} />
                   <span
                     className={`inline-flex items-center gap-1.5 text-xs ${
@@ -648,6 +709,7 @@ function TodoListContent({ user }: { user: User }) {
                       by {todo.assigned_by_name}
                     </span>
                   )}
+                  <EstimateBadge todo={todo} />
                 </div>
               </div>
             );
@@ -662,6 +724,7 @@ function TodoListContent({ user }: { user: User }) {
                 <TableHead className="w-[42%] text-xs font-semibold uppercase tracking-wide text-muted-foreground">Task</TableHead>
                 <TableHead className="w-[21%] text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assigned to</TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assigned by</TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Estimate</TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Due date</TableHead>
                 <TableHead className="w-12" />
               </TableRow>
@@ -721,6 +784,9 @@ function TodoListContent({ user }: { user: User }) {
                       <PersonPill name={todo.assigned_by_name} />
                     </TableCell>
                     <TableCell>
+                      <EstimateBadge todo={todo} />
+                    </TableCell>
+                    <TableCell>
                       <span
                         className={`inline-flex items-center gap-1.5 text-sm ${
                           backlogged
@@ -762,7 +828,22 @@ function TodoListContent({ user }: { user: User }) {
           onCreated={() => {
             setShowCreate(false);
             void fetchTodos();
+            // Pick up the background AI estimate shortly after creation.
+            estimateRefetchTimers.current.forEach((t) => window.clearTimeout(t));
+            estimateRefetchTimers.current = [5000, 15000].map((ms) =>
+              window.setTimeout(() => void fetchTodos(), ms)
+            );
           }}
+        />
+      )}
+
+      {hoursPromptTodo && (
+        <ActualHoursDialog
+          todo={hoursPromptTodo}
+          onClose={() => setHoursPromptTodo(null)}
+          onSaved={(updated) =>
+            setTodos((prev) => sortTodos(prev.map((t) => (t.id === updated.id ? updated : t))))
+          }
         />
       )}
     </div>
@@ -783,6 +864,7 @@ function CreateTaskModal({
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
   // Default the due date to the end of the week (upcoming Sunday).
   const [dueDate, setDueDate] = useState(upcomingSundayLocalISO);
+  const [recurrence, setRecurrence] = useState<RecurrenceValue>({ interval: null, unit: null });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -803,6 +885,8 @@ function CreateTaskModal({
           description: description.trim() || null,
           assignees: selectedAssignees,
           due_date: dueDate || null,
+          recurrence_interval: recurrence.interval,
+          recurrence_unit: recurrence.unit,
         }),
       });
       onCreated();
@@ -869,6 +953,12 @@ function CreateTaskModal({
               </label>
               <Input id="task-due" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">
+              Repeat <span className="text-muted-foreground font-normal">(optional)</span>
+            </label>
+            <RecurrencePicker value={recurrence} onChange={setRecurrence} />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex justify-end gap-2 pt-2">

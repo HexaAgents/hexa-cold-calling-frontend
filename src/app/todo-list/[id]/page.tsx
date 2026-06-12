@@ -10,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getTodoAssignees, isTodoAssignedTo } from "@/lib/todo-assignees";
 import { getPersonPillClasses, getPersonDotClasses } from "@/lib/todo-colors";
+import { EstimateBadge, ActualHoursDialog } from "@/components/todo/todo-estimate";
+import { RecurrencePicker, recurrenceLabel, type RecurrenceValue } from "@/components/todo/todo-recurrence";
 import { ArrowLeft, Trash2, CheckCircle2, Circle, AlertTriangle, CalendarDays, Check } from "lucide-react";
 import type { Todo, TodoAssignee, User } from "@/types";
 
@@ -70,12 +72,15 @@ function formSignature(values: {
   description: string;
   selectedAssigneeIds: string[];
   dueDate: string;
+  recurrence: RecurrenceValue;
 }): string {
   return JSON.stringify({
     title: values.title.trim(),
     description: values.description.trim() || null,
     selectedAssigneeIds: values.selectedAssigneeIds,
     due_date: values.dueDate || null,
+    recurrence_interval: values.recurrence.interval,
+    recurrence_unit: values.recurrence.unit,
   });
 }
 
@@ -156,10 +161,18 @@ function TodoDetailContent({ user }: { user: User }) {
   const [description, setDescription] = useState("");
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState("");
+  const [recurrence, setRecurrence] = useState<RecurrenceValue>({ interval: null, unit: null });
+  const [showHoursDialog, setShowHoursDialog] = useState(false);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const todoRef = useRef<Todo | null>(null);
   const assigneesRef = useRef<TodoAssignee[]>([]);
-  const formRef = useRef({ title: "", description: "", selectedAssigneeIds: [] as string[], dueDate: "" });
+  const formRef = useRef({
+    title: "",
+    description: "",
+    selectedAssigneeIds: [] as string[],
+    dueDate: "",
+    recurrence: { interval: null, unit: null } as RecurrenceValue,
+  });
   const lastSavedSignatureRef = useRef("");
   const canEditRef = useRef(false);
 
@@ -176,6 +189,7 @@ function TodoDetailContent({ user }: { user: User }) {
       description: t.description ?? "",
       selectedAssigneeIds: getTodoAssignees(t).map((assignee) => assignee.id),
       dueDate: t.due_date ?? "",
+      recurrence: { interval: t.recurrence_interval ?? null, unit: t.recurrence_unit ?? null },
     };
     formRef.current = nextForm;
     lastSavedSignatureRef.current = formSignature(nextForm);
@@ -184,6 +198,7 @@ function TodoDetailContent({ user }: { user: User }) {
     setDescription(nextForm.description);
     setSelectedAssigneeIds(nextForm.selectedAssigneeIds);
     setDueDate(nextForm.dueDate);
+    setRecurrence(nextForm.recurrence);
   }, []);
 
   const fetchTodo = useCallback(async () => {
@@ -229,10 +244,10 @@ function TodoDetailContent({ user }: { user: User }) {
   }, [assignees]);
 
   useEffect(() => {
-    const nextForm = { title, description, selectedAssigneeIds, dueDate };
+    const nextForm = { title, description, selectedAssigneeIds, dueDate, recurrence };
     formRef.current = nextForm;
     setHasUnsavedChanges(todoRef.current ? formSignature(nextForm) !== lastSavedSignatureRef.current : false);
-  }, [title, description, selectedAssigneeIds, dueDate]);
+  }, [title, description, selectedAssigneeIds, dueDate, recurrence]);
 
   const canManage = !!todo && todo.assigned_by_id === user.id;
   const canEdit = !!todo && (canManage || isTodoAssignedTo(todo, user.id));
@@ -257,6 +272,8 @@ function TodoDetailContent({ user }: { user: User }) {
         return assignee ? [assignee] : [];
       }),
       due_date: form.dueDate || null,
+      recurrence_interval: form.recurrence.interval,
+      recurrence_unit: form.recurrence.unit,
     };
   }, []);
 
@@ -333,7 +350,13 @@ function TodoDetailContent({ user }: { user: User }) {
     await saveDraft();
     await patch({ unassign: true }, { syncFormAfter: true });
   };
-  const handleToggleDone = () => todo && patch({ is_done: !todo.is_done });
+  const handleToggleDone = async () => {
+    if (!todo) return;
+    const markingDone = !todo.is_done;
+    await patch({ is_done: markingDone });
+    // Task is already done; the dialog just collects optional actual hours.
+    if (markingDone) setShowHoursDialog(true);
+  };
 
   const handleDelete = async () => {
     if (!todo) return;
@@ -404,7 +427,7 @@ function TodoDetailContent({ user }: { user: User }) {
                 <p className="text-muted-foreground italic">No description.</p>
               )}
             </div>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="rounded-xl border border-border bg-muted/20 p-3.5">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Assigned to</p>
                 <AssigneePills todo={todo} />
@@ -419,6 +442,10 @@ function TodoDetailContent({ user }: { user: User }) {
                   <CalendarDays size={14} className="opacity-70" />
                   {formatDate(todo.due_date)}
                 </p>
+              </div>
+              <div className="rounded-xl border border-border bg-muted/20 p-3.5">
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Estimate</p>
+                <EstimateBadge todo={todo} />
               </div>
             </div>
           </div>
@@ -483,6 +510,13 @@ function TodoDetailContent({ user }: { user: User }) {
                   Assigned by
                 </span>
                 <PersonPill name={todo.assigned_by_name} />
+              </div>
+
+              <div className="flex items-center justify-between gap-3 border-b border-border/70 pb-3">
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Estimate
+                </span>
+                <EstimateBadge todo={todo} />
               </div>
 
               <div className="space-y-1.5">
@@ -550,6 +584,17 @@ function TodoDetailContent({ user }: { user: User }) {
             </div>
           </div>
         </div>
+      )}
+
+      {showHoursDialog && todo && (
+        <ActualHoursDialog
+          todo={todo}
+          onClose={() => setShowHoursDialog(false)}
+          onSaved={(updated) => {
+            todoRef.current = updated;
+            setTodo(updated);
+          }}
+        />
       )}
     </div>
   );

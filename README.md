@@ -75,7 +75,7 @@ The test suite focuses on user-visible behavior and API payload contracts rather
 - Calling workflow: call tracker queue behavior, claim/session state, UI actions around call outcomes, and company flags (flag a company with a suggested or custom reason; a warning banner appears whenever any contact from that company comes up, without removing it from the pool).
 - Imports and reporting: CSV import page states and productivity table/summary rendering.
 - Settings: settings form rendering, editing, and submission behavior.
-- To-do list: table columns, due-date sorting, multi-assignee pills, assigner/assignee permissions, task creation payloads, detail-page editing rules, overdue warnings, and muted amber overdue styling.
+- To-do list: table columns, due-date sorting, multi-assignee pills, assigner/assignee permissions, task creation payloads, detail-page editing rules, overdue warnings, muted amber overdue styling, AI time-estimate display states (pending/done/failed plus reported actuals), and the actual-hours dialog asked when ticking a task done.
 - Shared utilities: multi-assignee normalization and payload construction in `src/lib/todo-assignees.ts`.
 
 Run `npm test` before pushing UI behavior changes. Run `npm run lint` after class name, hook, or accessibility changes. Run `npm run build` when changing Next.js config, route boundaries, environment variables, or TypeScript contracts.

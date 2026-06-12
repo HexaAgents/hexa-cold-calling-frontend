@@ -286,9 +286,18 @@ export interface Todo {
   assigned_by_name: string | null;
   due_date: string | null;
   is_done: boolean;
+  recurrence_interval: number | null;
+  recurrence_unit: RecurrenceUnit | null;
+  recurrence_spawned?: boolean;
+  estimated_hours_min: number | null;
+  estimated_hours_max: number | null;
+  estimate_status: "pending" | "done" | "failed" | null;
+  actual_hours: number | null;
   created_at: string | null;
   updated_at: string | null;
 }
+
+export type RecurrenceUnit = "day" | "week" | "month";
 
 export interface TodoAssignee {
   id: string;

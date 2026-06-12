@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import TodoListPage from "@/app/todo-list/page";
 import { apiFetch } from "@/lib/api";
 import { upcomingSundayLocalISO } from "@/lib/utils";
@@ -26,6 +26,10 @@ function makeTodo(overrides: Partial<Todo>): Todo {
     assigned_by_name: "Test",
     due_date: "2099-01-01",
     is_done: false,
+    estimated_hours_min: null,
+    estimated_hours_max: null,
+    estimate_status: null,
+    actual_hours: null,
     created_at: "2026-01-01T00:00:00",
     updated_at: null,
     ...overrides,
@@ -60,13 +64,14 @@ describe("TodoListPage", () => {
     window.history.pushState({}, "", "/todo-list");
   });
 
-  it("renders the four column headers", async () => {
+  it("renders the column headers including Estimate", async () => {
     mockData([makeTodo({})]);
     render(<TodoListPage />);
     await waitFor(() => {
       expect(screen.getByText("Task")).toBeInTheDocument();
       expect(screen.getByText("Assigned to")).toBeInTheDocument();
       expect(screen.getByText("Assigned by")).toBeInTheDocument();
+      expect(screen.getByText("Estimate")).toBeInTheDocument();
       expect(screen.getByText("Due date")).toBeInTheDocument();
     });
   });
@@ -298,6 +303,143 @@ describe("TodoListPage", () => {
     );
     const body = JSON.parse((postCall![1] as RequestInit).body as string);
     expect(body.due_date).toBeNull();
+  });
+
+  it("shows a pulsing Estimating state while the AI estimate is pending", async () => {
+    mockData([makeTodo({ estimate_status: "pending" })]);
+    render(<TodoListPage />);
+    await waitFor(() => {
+      // Rendered in both the mobile card and the desktop table.
+      expect(screen.getAllByText("Estimating…").length).toBeGreaterThan(0);
+    });
+  });
+
+  it("shows the estimated hour range once the estimate is done", async () => {
+    mockData([
+      makeTodo({ estimate_status: "done", estimated_hours_min: 2, estimated_hours_max: 4 }),
+    ]);
+    render(<TodoListPage />);
+    await waitFor(() => {
+      expect(screen.getAllByText("2–4h").length).toBeGreaterThan(0);
+    });
+  });
+
+  it("collapses an equal estimate range to a single value", async () => {
+    mockData([
+      makeTodo({ estimate_status: "done", estimated_hours_min: 3, estimated_hours_max: 3 }),
+    ]);
+    render(<TodoListPage />);
+    await waitFor(() => {
+      expect(screen.getAllByText("3h").length).toBeGreaterThan(0);
+    });
+  });
+
+  it("shows reported actual hours on completed tasks", async () => {
+    window.history.pushState({}, "", "/todo-list?section=complete");
+    mockData([
+      makeTodo({
+        is_done: true,
+        estimate_status: "done",
+        estimated_hours_min: 1,
+        estimated_hours_max: 2,
+        actual_hours: 3,
+      }),
+    ]);
+    render(<TodoListPage />);
+    await waitFor(() => {
+      expect(screen.getAllByText("took 3h").length).toBeGreaterThan(0);
+    });
+  });
+
+  it("asks for actual hours after ticking a task done and PATCHes the choice", async () => {
+    const todo = makeTodo({});
+    mockApiFetch.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === "/todos") return Promise.resolve([todo] as unknown);
+      if (path === "/todos/assignees") return Promise.resolve(ASSIGNEES as unknown);
+      if (path === `/todos/${todo.id}` && options?.method === "PATCH") {
+        const body = JSON.parse(options.body as string);
+        return Promise.resolve({ ...todo, ...body } as unknown);
+      }
+      return Promise.resolve({} as unknown);
+    });
+    render(<TodoListPage />);
+    await waitFor(() => expect(screen.getAllByText(todo.title).length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getAllByLabelText(`Mark "${todo.title}" done`)[0]);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("How long did this take?")).toBeInTheDocument();
+    // This task has no estimate, so the reference line is omitted.
+    expect(within(dialog).queryByText(/The AI estimated/)).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "2h" }));
+
+    await waitFor(() => {
+      const patches = mockApiFetch.mock.calls.filter(
+        ([p, o]) => p === `/todos/${todo.id}` && (o as RequestInit)?.method === "PATCH"
+      );
+      // First PATCH marks done, second reports actual hours.
+      expect(patches.length).toBe(2);
+      expect(JSON.parse((patches[0][1] as RequestInit).body as string)).toEqual({ is_done: true });
+      expect(JSON.parse((patches[1][1] as RequestInit).body as string)).toEqual({ actual_hours: 2 });
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("skipping the hours dialog sends no actual_hours PATCH", async () => {
+    const todo = makeTodo({});
+    mockApiFetch.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === "/todos") return Promise.resolve([todo] as unknown);
+      if (path === "/todos/assignees") return Promise.resolve(ASSIGNEES as unknown);
+      if (path === `/todos/${todo.id}` && options?.method === "PATCH") {
+        const body = JSON.parse(options.body as string);
+        return Promise.resolve({ ...todo, ...body } as unknown);
+      }
+      return Promise.resolve({} as unknown);
+    });
+    render(<TodoListPage />);
+    await waitFor(() => expect(screen.getAllByText(todo.title).length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getAllByLabelText(`Mark "${todo.title}" done`)[0]);
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Skip" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+    const patches = mockApiFetch.mock.calls.filter(
+      ([p, o]) => p === `/todos/${todo.id}` && (o as RequestInit)?.method === "PATCH"
+    );
+    expect(patches.length).toBe(1);
+    expect(JSON.parse((patches[0][1] as RequestInit).body as string)).toEqual({ is_done: true });
+  });
+
+  it("does not ask for hours when un-ticking a completed task", async () => {
+    const todo = makeTodo({ is_done: true });
+    window.history.pushState({}, "", "/todo-list?section=complete");
+    mockApiFetch.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === "/todos") return Promise.resolve([todo] as unknown);
+      if (path === "/todos/assignees") return Promise.resolve(ASSIGNEES as unknown);
+      if (path === `/todos/${todo.id}` && options?.method === "PATCH") {
+        const body = JSON.parse(options.body as string);
+        return Promise.resolve({ ...todo, ...body } as unknown);
+      }
+      return Promise.resolve({} as unknown);
+    });
+    render(<TodoListPage />);
+    await waitFor(() => expect(screen.getAllByText(todo.title).length).toBeGreaterThan(0));
+
+    fireEvent.click(screen.getAllByLabelText(`Mark "${todo.title}" done`)[0]);
+
+    await waitFor(() => {
+      const patches = mockApiFetch.mock.calls.filter(
+        ([p, o]) => p === `/todos/${todo.id}` && (o as RequestInit)?.method === "PATCH"
+      );
+      expect(patches.length).toBe(1);
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("creates a task with multiple assignees", async () => {

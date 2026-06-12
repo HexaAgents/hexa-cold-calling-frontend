@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import AuthGuard from "@/components/layout/auth-guard";
 import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton, ListSkeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -64,20 +66,19 @@ function ContactsContent() {
   const [sortOrder, setSortOrder] = useState("asc");
   const [outcomeFilter, setOutcomeFilter] = useState<string>("");
   const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debouncedSearch = useDebouncedValue(search);
   const [loading, setLoading] = useState(true);
   const [enrichmentCounts, setEnrichmentCounts] = useState<Record<string, number>>({});
   const [enriching, setEnriching] = useState(false);
   const [creditError, setCreditError] = useState(false);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    debounceRef.current = setTimeout(() => {
-      setDebouncedSearch(search);
-      setPage(1);
-    }, 300);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [search]);
+  // Reset to the first page when the search changes (render-time adjustment
+  // instead of an effect, per react-hooks/set-state-in-effect).
+  const [prevSearch, setPrevSearch] = useState(debouncedSearch);
+  if (prevSearch !== debouncedSearch) {
+    setPrevSearch(debouncedSearch);
+    setPage(1);
+  }
 
   const fetchContacts = useCallback(async () => {
     setLoading(true);
@@ -243,9 +244,7 @@ function ContactsContent() {
       {/* Mobile card list */}
       <div className="space-y-2 lg:hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-16 text-muted-foreground">
-            <Loader2 size={18} className="mr-2 animate-spin" /> Loading contacts...
-          </div>
+          <ListSkeleton rows={6} />
         ) : contacts.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-16">
             <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
@@ -331,13 +330,18 @@ function ContactsContent() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-16">
-                  <div className="flex items-center justify-center text-muted-foreground">
-                    <Loader2 size={18} className="mr-2 animate-spin" /> Loading contacts...
-                  </div>
-                </TableCell>
-              </TableRow>
+              Array.from({ length: 10 }).map((_, r) => (
+                <TableRow key={r}>
+                  {Array.from({ length: 6 }).map((_, c) => (
+                    <TableCell key={c}>
+                      <Skeleton
+                        className="h-3.5 w-full"
+                        style={{ animationDelay: `${r * 60}ms` }}
+                      />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
             ) : contacts.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-16">

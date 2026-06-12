@@ -200,6 +200,85 @@ body::after {
   animation: progress-pulse 2s ease-in-out infinite;
 }
 
+/* ---------------------------------------------------------------------------
+   Loading system: skeleton shimmer + branded page loader
+--------------------------------------------------------------------------- */
+
+@keyframes skeleton-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Skeleton block with a gold-tinted gradient sweeping across a muted base.
+   Used by the Skeleton primitive in components/ui/skeleton.tsx. */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background: hsl(var(--muted));
+}
+
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    hsl(var(--primary) / 0.1) 45%,
+    hsl(var(--primary) / 0.18) 50%,
+    hsl(var(--primary) / 0.1) 55%,
+    transparent 100%
+  );
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+/* Concentric square outlines that pulse outward in sequence — echoes the
+   platform's square-corner design. Used by the PageLoader component. */
+@keyframes loader-square-pulse {
+  0% {
+    transform: scale(0.55);
+    opacity: 0;
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.15);
+    opacity: 0;
+  }
+}
+
+.loader-square {
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid hsl(var(--primary));
+  animation: loader-square-pulse 1.8s cubic-bezier(0.25, 0.6, 0.4, 1) infinite;
+}
+
+@keyframes loader-core-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.55;
+    transform: scale(0.88);
+  }
+}
+
+.loader-core {
+  animation: loader-core-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes loader-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.loader-fade-in {
+  animation: loader-fade-in 0.25s ease-out both;
+}
+
 .side-pane-dark {
   background: linear-gradient(180deg, #080808 0%, #1a1a1a 50%, #080808 100%);
   color: #e5e5e5;

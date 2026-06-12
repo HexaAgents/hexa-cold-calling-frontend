@@ -4,6 +4,9 @@ import { useEffect, useState, useCallback, useRef, type Dispatch, type SetStateA
 import AuthGuard from "@/components/layout/auth-guard";
 import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
+import { cachedFetch } from "@/lib/cached-fetch";
+import PageLoader from "@/components/ui/page-loader";
+import { ContactCardSkeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -93,6 +96,14 @@ interface LocationOptions {
   countries: string[];
 }
 
+/** Response of GET /calls/contact-bundle/{id} — everything shown for a contact. */
+interface ContactBundle {
+  notes: Note[];
+  calls: CallLog[];
+  email_logs: EmailLog[];
+  company_flag: CompanyFlag | null;
+}
+
 function CallTracker({ user }: { user: User }) {
   // Persisted across navigation so the user returns to where they left off.
   const [contact, setContact] = usePersistedState<Contact | null>("callTracker:contact", null);
@@ -178,19 +189,32 @@ function CallTracker({ user }: { user: User }) {
   const canGoBack =
     historyIndex === null ? sessionHistory.length > 0 : historyIndex < sessionHistory.length - 1;
 
-  const refreshLocationCounts = useCallback(() => {
-    apiFetch<LocationCounts>("/contacts/location-counts")
-      .then(setLocationCounts)
-      .catch(() => {});
+  // Trailing-debounced so rapid claim/skip sequences trigger one counts
+  // refresh instead of one per transition. Mount passes 0 for an immediate fetch.
+  const countsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshLocationCounts = useCallback((delayMs = 1200) => {
+    if (countsTimerRef.current) clearTimeout(countsTimerRef.current);
+    countsTimerRef.current = setTimeout(() => {
+      apiFetch<LocationCounts>("/contacts/location-counts")
+        .then(setLocationCounts)
+        .catch(() => {});
+    }, delayMs);
+  }, []);
+  useEffect(() => () => {
+    if (countsTimerRef.current) clearTimeout(countsTimerRef.current);
   }, []);
 
   useEffect(() => {
-    apiFetch<LocationOptions>("/contacts/locations")
+    // Location options and settings change rarely — serve from sessionStorage
+    // so revisits render instantly, revalidating in the background.
+    cachedFetch<LocationOptions>("/contacts/locations", { onRevalidate: setLocations })
       .then(setLocations)
       .catch(() => {})
       .finally(() => setLoadingLocations(false));
-    refreshLocationCounts();
-    apiFetch<Settings>("/settings")
+    refreshLocationCounts(0);
+    cachedFetch<Settings>("/settings", {
+      onRevalidate: (s) => setRetryDays(s.retry_days),
+    })
       .then((s) => setRetryDays(s.retry_days))
       .catch(() => {});
     apiFetch<{ connected: boolean }>("/email/oauth/status")
@@ -202,13 +226,19 @@ function CallTracker({ user }: { user: User }) {
     if (sessionHistory.length === 0) return;
     let cancelled = false;
     (async () => {
-      const checks = await Promise.all(
-        sessionHistory.map((c) =>
-          apiFetch<Contact>(`/contacts/${c.id}`).then(() => true).catch(() => false)
-        )
-      );
+      // One batch existence check instead of one GET per history entry.
+      let existing: Set<string>;
+      try {
+        const res = await apiFetch<{ existing_ids: string[] }>("/contacts/validate", {
+          method: "POST",
+          body: JSON.stringify({ ids: sessionHistory.map((c) => c.id) }),
+        });
+        existing = new Set(res.existing_ids);
+      } catch {
+        return; // Validation is best-effort; keep history as-is on failure.
+      }
       if (cancelled) return;
-      const valid = sessionHistory.filter((_, i) => checks[i]);
+      const valid = sessionHistory.filter((c) => existing.has(c.id));
       if (valid.length < sessionHistory.length) {
         setSessionHistory(valid);
         if (historyIndex !== null) {
@@ -338,21 +368,16 @@ function CallTracker({ user }: { user: User }) {
 
     let cancelled = false;
     (async () => {
-      const [n, c, e, f] = await Promise.all([
-        apiFetch<Note[]>(`/contacts/${displayContactId}/notes`).catch(() => []),
-        apiFetch<CallLog[]>(`/calls/contact/${displayContactId}`).catch(() => []),
-        apiFetch<EmailLog[]>(`/email/logs/${displayContactId}`).catch(() => []),
-        displayContact.company_name
-          ? apiFetch<CompanyFlag | null>(
-              `/companies/flag?company_name=${encodeURIComponent(displayContact.company_name)}`
-            ).catch(() => null)
-          : Promise.resolve(null),
-      ]);
+      // Single round trip for notes, call history, email logs, and the
+      // company flag (replaces a 4-request fan-out per contact).
+      const bundle = await apiFetch<ContactBundle>(
+        `/calls/contact-bundle/${displayContactId}`
+      ).catch(() => null);
       if (cancelled) return;
-      setNotes(n);
-      setCalls(c);
-      setEmailLogs(e);
-      setCompanyFlag(f && f.id ? f : null);
+      setNotes(bundle?.notes ?? []);
+      setCalls(bundle?.calls ?? []);
+      setEmailLogs(bundle?.email_logs ?? []);
+      setCompanyFlag(bundle?.company_flag?.id ? bundle.company_flag : null);
     })();
     return () => {
       cancelled = true;
@@ -860,7 +885,7 @@ function CallTracker({ user }: { user: User }) {
   };
 
   if (loadingLocations) {
-    return <div className="p-6 text-muted-foreground">Loading...</div>;
+    return <PageLoader label="Preparing call tracker" />;
   }
 
   if (!started) {
@@ -943,7 +968,7 @@ function CallTracker({ user }: { user: User }) {
   }
 
   if (loading) {
-    return <div className="p-6 text-muted-foreground">Loading next contact...</div>;
+    return <ContactCardSkeleton className="mx-auto max-w-3xl" />;
   }
 
   if ((queueEmpty || !contact) && !isViewingHistory) {

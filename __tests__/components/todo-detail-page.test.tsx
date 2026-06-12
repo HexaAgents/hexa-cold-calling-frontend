@@ -20,6 +20,10 @@ function makeTodo(overrides: Partial<Todo>): Todo {
     assigned_by_name: "Test",
     due_date: "2099-01-01",
     is_done: false,
+    estimated_hours_min: null,
+    estimated_hours_max: null,
+    estimate_status: null,
+    actual_hours: null,
     created_at: "2026-01-01T00:00:00",
     updated_at: null,
     ...overrides,
@@ -70,6 +74,51 @@ describe("TodoDetailPage", () => {
     expect(screen.getByText("Delete")).toBeInTheDocument();
     expect(screen.getByText("Mark done")).toBeInTheDocument();
     expect(screen.getByText("Saved automatically.")).toBeInTheDocument();
+  });
+
+  it("shows the AI estimate in the editable sidebar", async () => {
+    mockTodo(
+      makeTodo({
+        assigned_by_id: CURRENT_USER_ID,
+        estimate_status: "done",
+        estimated_hours_min: 2,
+        estimated_hours_max: 4,
+      })
+    );
+    render(<TodoDetailPage />);
+    await waitFor(() => expect(screen.getByText("Estimate")).toBeInTheDocument());
+    expect(screen.getByText("2–4h")).toBeInTheDocument();
+  });
+
+  it("asks for actual hours after marking the task done", async () => {
+    const todo = makeTodo({ assigned_by_id: CURRENT_USER_ID });
+    mockApiFetch.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === "/todos/test-id" && options?.method === "PATCH") {
+        const body = JSON.parse(options.body as string);
+        return Promise.resolve({ ...todo, ...body } as unknown);
+      }
+      if (path === "/todos/test-id") return Promise.resolve(todo as unknown);
+      if (path === "/todos/assignees") return Promise.resolve([] as unknown);
+      return Promise.resolve({} as unknown);
+    });
+    render(<TodoDetailPage />);
+    await waitFor(() => expect(screen.getByText("Mark done")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText("Mark done"));
+
+    await waitFor(() => {
+      expect(screen.getByText("How long did this take?")).toBeInTheDocument();
+    });
+
+    // Saving a quick-pick reports the hours via a second PATCH.
+    fireEvent.click(screen.getByRole("button", { name: "1h" }));
+    await waitFor(() => {
+      const patches = mockApiFetch.mock.calls.filter(
+        ([p, o]) => p === "/todos/test-id" && (o as RequestInit)?.method === "PATCH"
+      );
+      expect(patches.length).toBe(2);
+      expect(JSON.parse((patches[1][1] as RequestInit).body as string)).toEqual({ actual_hours: 1 });
+    });
   });
 
   it("is read-only for non-assigners", async () => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
+import PageLoader from "@/components/ui/page-loader";
 import type { User } from "@/types";
 
 interface AuthGuardProps {
@@ -39,11 +40,7 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   }, [router, pathname]);
 
   if (loading || !user) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <p className="text-muted-foreground text-sm">Loading...</p>
-      </div>
-    );
+    return <PageLoader fullScreen />;
   }
 
   return <>{children(user)}</>;

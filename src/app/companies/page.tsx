@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import AuthGuard from "@/components/layout/auth-guard";
 import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { ListSkeleton } from "@/components/ui/skeleton";
+import PageLoader from "@/components/ui/page-loader";
 import { Separator } from "@/components/ui/separator";
 import {
   Table,
@@ -54,7 +57,7 @@ function CompaniesContent() {
   const [companies, setCompanies] = useState<CompanySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const debouncedSearch = useDebouncedValue(search);
 
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [detail, setDetail] = useState<CompanyDetail | null>(null);
@@ -74,16 +77,10 @@ function CompaniesContent() {
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      void fetchCompanies();
+      void fetchCompanies(debouncedSearch || undefined);
     }, 0);
     return () => clearTimeout(timeout);
-  }, [fetchCompanies]);
-
-  const handleSearch = (value: string) => {
-    setSearch(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => fetchCompanies(value), 300);
-  };
+  }, [fetchCompanies, debouncedSearch]);
 
   const handleSelectCompany = async (companyName: string) => {
     setSelectedCompany(companyName);
@@ -310,11 +307,7 @@ function CompaniesContent() {
 
   // --- DETAIL LOADING ---
   if (selectedCompany && detailLoading) {
-    return (
-      <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-        Loading company details...
-      </div>
-    );
+    return <PageLoader label="Loading company details" />;
   }
 
   // --- LIST VIEW ---
@@ -331,7 +324,7 @@ function CompaniesContent() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={search}
-            onChange={(e) => handleSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search companies..."
             className="pl-9 h-9 text-sm"
           />
@@ -339,9 +332,7 @@ function CompaniesContent() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20 text-sm text-muted-foreground">
-          Loading...
-        </div>
+        <ListSkeleton rows={8} />
       ) : companies.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="h-14 w-14 rounded-full bg-muted flex items-center justify-center mb-4">
