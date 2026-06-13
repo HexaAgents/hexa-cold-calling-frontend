@@ -85,13 +85,13 @@ describe("TodoDetailPage", () => {
     expect(screen.getByText(/Only Srijan can make changes/)).toBeInTheDocument();
   });
 
-  it("lets the assignee edit but not mark done or delete", async () => {
+  it("lets the assignee edit and mark done but not delete", async () => {
     mockTodo(makeTodo({ assigned_by_id: "someone-else", assigned_by_name: "Srijan", assigned_to_id: CURRENT_USER_ID }));
     render(<TodoDetailPage />);
     await waitFor(() => expect(screen.getByDisplayValue("Prepare onboarding deck")).toBeInTheDocument());
     expect(screen.queryByText("Edit")).not.toBeInTheDocument();
-    // Only the creator (or the super user) can tick a task off.
-    expect(screen.queryByText("Mark done")).not.toBeInTheDocument();
+    // The assignee can tick a task off, but only the creator can delete it.
+    expect(screen.getByText("Mark done")).toBeInTheDocument();
     expect(screen.getByText("Saved automatically.")).toBeInTheDocument();
     expect(screen.queryByText("Delete")).not.toBeInTheDocument();
   });
@@ -109,8 +109,8 @@ describe("TodoDetailPage", () => {
     }));
     render(<TodoDetailPage />);
     await waitFor(() => expect(screen.getByDisplayValue("Prepare onboarding deck")).toBeInTheDocument());
-    // Assignees can edit details but cannot tick the task off.
-    expect(screen.queryByText("Mark done")).not.toBeInTheDocument();
+    // Assignees can edit details and tick the task off, but cannot delete it.
+    expect(screen.getByText("Mark done")).toBeInTheDocument();
     expect(screen.getByText("Saved automatically.")).toBeInTheDocument();
     expect(screen.queryByText("Delete")).not.toBeInTheDocument();
   });

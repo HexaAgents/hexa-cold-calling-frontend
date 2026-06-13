@@ -275,14 +275,14 @@ describe("TodoListPage", () => {
     screen.getAllByLabelText('Mark "Mine" done').forEach((el) => expect(el).not.toBeDisabled());
   });
 
-  it("does not let the assignee tick off a task they did not create", async () => {
+  it("lets the assignee tick off a task they did not create but not delete it", async () => {
     mockData([
       makeTodo({ id: "assigned", title: "Assigned to me", assigned_by_id: "someone-else", assigned_to_id: CURRENT_USER_ID }),
     ]);
     render(<TodoListPage />);
     await waitFor(() => expect(screen.getAllByText("Assigned to me").length).toBeGreaterThan(0));
-    // Only the creator (or the super user) can mark a task done.
-    screen.getAllByLabelText('Mark "Assigned to me" done').forEach((el) => expect(el).toBeDisabled());
+    // The assignee can mark the task done, but only the creator can delete it.
+    screen.getAllByLabelText('Mark "Assigned to me" done').forEach((el) => expect(el).not.toBeDisabled());
     expect(screen.queryAllByLabelText('Delete "Assigned to me"')).toHaveLength(0);
   });
 

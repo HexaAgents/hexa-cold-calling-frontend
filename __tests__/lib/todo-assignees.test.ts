@@ -49,13 +49,30 @@ describe("todo-assignees utilities", () => {
     expect(isTodoAssignedTo(todo, "someone-else")).toBe(false);
   });
 
-  it("only lets the creator tick off a task", () => {
+  it("lets the creator tick off a task but not an unrelated user", () => {
     const todo = makeTodo({ assigned_by_id: "assigner" });
     const creator: User = { id: "assigner", email: "creator@hexaagents.com", full_name: "Creator" };
-    const assignee: User = { id: "u-assignee", email: "assignee@hexaagents.com", full_name: "Assignee" };
+    const unrelated: User = { id: "u-unrelated", email: "unrelated@hexaagents.com", full_name: "Unrelated" };
 
     expect(canCompleteTodo(todo, creator)).toBe(true);
-    expect(canCompleteTodo(todo, assignee)).toBe(false);
+    expect(canCompleteTodo(todo, unrelated)).toBe(false);
+  });
+
+  it("lets a person the task is assigned to tick it off", () => {
+    const todo = makeTodo({
+      assigned_by_id: "assigner",
+      assignees: [{ id: "u-assignee", first_name: "Assignee" }],
+    });
+    const assignee: User = { id: "u-assignee", email: "assignee@hexaagents.com", full_name: "Assignee" };
+
+    expect(canCompleteTodo(todo, assignee)).toBe(true);
+  });
+
+  it("lets a legacy single-assignee tick off a task", () => {
+    const todo = makeTodo({ assigned_by_id: "assigner", assigned_to_id: "u-legacy" });
+    const legacy: User = { id: "u-legacy", email: "legacy@hexaagents.com", full_name: "Legacy" };
+
+    expect(canCompleteTodo(todo, legacy)).toBe(true);
   });
 
   it("lets the super user tick off any task regardless of creator", () => {
