@@ -91,14 +91,8 @@ describe("CallTrackerPage", () => {
       if (path.startsWith("/calls/next")) {
         return MOCK_CONTACT;
       }
-      if (path.match(/\/contacts\/[\w-]+\/notes/)) {
-        return [];
-      }
       if (path.startsWith("/calls/contact-bundle/")) {
         return { notes: [], calls: [], email_logs: [], company_flag: null };
-      }
-      if (path.match(/\/calls\/contact/)) {
-        return [];
       }
       if (path === "/calls/log" && options?.method === "POST") {
         const body = JSON.parse(options.body as string);
@@ -258,8 +252,9 @@ describe("CallTrackerPage", () => {
         // the SQL RPC that resets call_outcome on every claim).
         return { ...MOCK_CONTACT, call_outcome: null };
       }
-      if (path.match(/\/contacts\/[\w-]+\/notes/)) return [];
-      if (path.match(/\/calls\/contact/)) return [];
+      if (path.startsWith("/calls/contact-bundle/")) {
+        return { notes: [], calls: [], email_logs: [], company_flag: null };
+      }
       if (path === "/calls/log" && options?.method === "POST") {
         const body = JSON.parse(options.body as string);
         return {
@@ -330,7 +325,6 @@ describe("CallTrackerPage", () => {
       if (path === "/contacts/locations") return { cities: [], states: [], countries: [] };
       if (path === "/settings") return MOCK_SETTINGS;
       if (path.startsWith("/calls/next")) return { ...MOCK_CONTACT, call_outcome: null };
-      if (path.match(/\/contacts\/[\w-]+\/notes/)) return [];
       if (path.startsWith("/calls/contact-bundle/")) {
         return {
           notes: [],
@@ -455,6 +449,13 @@ describe("CallTrackerPage", () => {
     });
     expect(screen.getByText("Mentioned on a call in June")).toBeInTheDocument();
     expect(screen.getByText(/Flagged by Sam Caller/)).toBeInTheDocument();
+
+    // The flag arrives with the displayed contact's bundle.
+    expect(
+      mockApiFetch.mock.calls.some(
+        ([p]) => typeof p === "string" && p === `/calls/contact-bundle/${MOCK_CONTACT.id}`
+      )
+    ).toBe(true);
 
     // Flagged companies show Edit/Remove instead of the flag button.
     expect(screen.getByText("Edit")).toBeInTheDocument();

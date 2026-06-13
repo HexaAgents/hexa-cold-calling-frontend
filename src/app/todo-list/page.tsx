@@ -7,6 +7,7 @@ import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ListSkeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -562,8 +563,8 @@ function TodoListContent({ user }: { user: User }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-        Loading...
+      <div className="py-6 sm:py-8 px-4 sm:px-6 max-w-5xl mx-auto">
+        <ListSkeleton rows={6} />
       </div>
     );
   }

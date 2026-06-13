@@ -6,6 +6,7 @@ import AuthGuard from "@/components/layout/auth-guard";
 import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import PageLoader from "@/components/ui/page-loader";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
@@ -133,7 +134,7 @@ function ContactDetail() {
   };
 
   if (!contact) {
-    return <div className="p-6 text-muted-foreground">Loading...</div>;
+    return <PageLoader label="Loading contact" />;
   }
 
   const fields: [string, string | null][] = [

@@ -6,6 +6,7 @@ import AuthGuard from "@/components/layout/auth-guard";
 import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { ListSkeleton } from "@/components/ui/skeleton";
 import {
   CalendarClock,
   CheckCircle2,
@@ -172,8 +173,8 @@ function ScheduledCallsContent() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
-        Loading...
+      <div className="py-6 sm:py-8 px-4 sm:px-6 max-w-4xl mx-auto">
+        <ListSkeleton rows={5} />
       </div>
     );
   }

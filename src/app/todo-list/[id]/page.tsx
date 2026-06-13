@@ -8,6 +8,7 @@ import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import PageLoader from "@/components/ui/page-loader";
 import { canCompleteTodo, getTodoAssignees, isTodoAssignedTo } from "@/lib/todo-assignees";
 import { PersonAvatar, PersonChip } from "@/components/todo/person-chip";
 import { type RecurrenceValue } from "@/components/todo/todo-recurrence";
@@ -352,7 +353,7 @@ function TodoDetailContent({ user }: { user: User }) {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-full text-sm text-muted-foreground">Loading...</div>;
+    return <PageLoader label="Loading task" />;
   }
 
   if (notFound || !todo) {

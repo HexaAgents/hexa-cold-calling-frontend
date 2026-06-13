@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import AuthGuard from "@/components/layout/auth-guard";
 import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
+import PageLoader from "@/components/ui/page-loader";
 import {
   Table,
   TableBody,
@@ -143,7 +144,7 @@ function ProductivityContent() {
   }
 
   if (loading) {
-    return <div className="flex items-center justify-center h-full text-muted-foreground">Loading...</div>;
+    return <PageLoader label="Loading productivity stats" />;
   }
 
   return (

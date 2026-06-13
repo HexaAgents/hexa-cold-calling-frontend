@@ -6,6 +6,7 @@ import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ListSkeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import {
   MailSearch,
@@ -141,8 +142,8 @@ function EmailTrackingContent() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        Loading...
+      <div className="py-6 sm:py-8 px-4 sm:px-6 max-w-4xl mx-auto">
+        <ListSkeleton rows={6} />
       </div>
     );
   }
@@ -202,7 +203,7 @@ function EmailTrackingContent() {
         <Separator className="mb-6" />
 
         {threadLoading ? (
-          <div className="text-sm text-muted-foreground py-12 text-center">Loading thread...</div>
+          <ListSkeleton rows={3} />
         ) : thread.length === 0 ? (
           <div className="text-sm text-muted-foreground py-12 text-center">
             No emails found. Try syncing to fetch the latest messages.

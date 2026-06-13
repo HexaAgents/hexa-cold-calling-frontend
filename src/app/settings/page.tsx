@@ -6,6 +6,7 @@ import AuthGuard from "@/components/layout/auth-guard";
 import AppShell from "@/components/layout/app-shell";
 import { apiFetch, ensureFreshToken } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import PageLoader from "@/components/ui/page-loader";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -264,7 +265,7 @@ function SettingsContent() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-full text-muted-foreground">Loading...</div>;
+    return <PageLoader label="Loading settings" />;
   }
 
   const sections = [
