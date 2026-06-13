@@ -28,12 +28,11 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { assigneePayload, getTodoAssignees, isTodoAssignedTo } from "@/lib/todo-assignees";
+import { assigneePayload, canCompleteTodo, getTodoAssignees, isTodoAssignedTo } from "@/lib/todo-assignees";
 import { RecurrencePicker, RecurrenceBadge, type RecurrenceValue } from "@/components/todo/todo-recurrence";
-import { EstimateBadge, ActualHoursDialog } from "@/components/todo/todo-estimate";
 import { upcomingSundayLocalISO } from "@/lib/utils";
-import { getPersonPillClasses, getPersonDotClasses } from "@/lib/todo-colors";
-import { ListTodo, Plus, Trash2, AlertTriangle, X, CalendarDays, Filter, Check, Pencil, ChevronDown, Search } from "lucide-react";
+import { PersonAvatar, PersonChip, AssigneeStack } from "@/components/todo/person-chip";
+import { ListTodo, Plus, Trash2, X, CalendarDays, Filter, Check, Pencil, ChevronDown, Search, Sparkles } from "lucide-react";
 import type { Todo, TodoAssignee, User } from "@/types";
 
 type TodoSection = "upcoming" | "overdue" | "complete";
@@ -70,10 +69,14 @@ function isUpcoming(todo: Todo): boolean {
   return !todo.is_done && !isBacklogged(todo);
 }
 
-function sortTodos(todos: Todo[]): Todo[] {
-  // Open tasks come first, then completed tasks; each group sorts by due date.
+function sortTodos(todos: Todo[], userId: string): Todo[] {
+  // Open tasks come first, then completed tasks. Within each group the
+  // logged-in user's tasks come first; each subgroup sorts by due date.
   return [...todos].sort((a, b) => {
     if (a.is_done !== b.is_done) return a.is_done ? 1 : -1;
+    const aMine = isTodoAssignedTo(a, userId);
+    const bMine = isTodoAssignedTo(b, userId);
+    if (aMine !== bMine) return aMine ? -1 : 1;
     if (a.due_date && b.due_date) return a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0;
     if (a.due_date) return -1;
     if (b.due_date) return 1;
@@ -87,43 +90,13 @@ function formatDate(d: string | null): string {
   return parsed.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-function PersonPill({ name }: { name: string | null }) {
-  if (!name) {
-    return <span className="text-xs text-muted-foreground">Unassigned</span>;
-  }
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${getPersonPillClasses(name)}`}
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${getPersonDotClasses(name)}`} />
-      {name}
-    </span>
-  );
-}
-
-function AssigneePills({ todo }: { todo: Todo }) {
-  const assignees = getTodoAssignees(todo);
-  if (assignees.length === 0) {
-    return <span className="text-xs text-muted-foreground">Unassigned</span>;
-  }
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {assignees.map((assignee) => (
-        <PersonPill key={assignee.id} name={assignee.first_name} />
-      ))}
-    </div>
-  );
-}
-
 function InlineTitleEditor({
   todo,
   canManage,
-  backlogged,
   onSave,
 }: {
   todo: Todo;
   canManage: boolean;
-  backlogged: boolean;
   onSave: (todoId: string, title: string) => Promise<void> | void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -181,11 +154,6 @@ function InlineTitleEditor({
         {todo.title}
       </span>
       <RecurrenceBadge todo={todo} />
-      {backlogged && (
-        <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full border border-rose-300/30 bg-rose-500/8 px-2 py-0.5 text-[10px] font-medium text-rose-600/90 ring-1 ring-inset ring-rose-400/10 dark:text-rose-300/90">
-          <AlertTriangle size={10} /> Overdue
-        </span>
-      )}
       {canManage && (
         <button
           type="button"
@@ -221,7 +189,7 @@ function InlineAssigneeEditor({
   const [draftIds, setDraftIds] = useState<string[]>(currentIds);
 
   if (!canManage) {
-    return <AssigneePills todo={todo} />;
+    return <AssigneeStack todo={todo} />;
   }
 
   const toggle = (id: string) => {
@@ -249,10 +217,10 @@ function InlineAssigneeEditor({
           type="button"
           aria-label="Edit assignees"
           onClick={(e) => e.stopPropagation()}
-          className="-my-1 flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:outline-none"
+          className="-mx-1.5 -my-1 flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-accent/60 focus-visible:bg-accent/60 focus-visible:outline-none"
         >
           <span className="min-w-0 flex-1">
-            <AssigneePills todo={todo} />
+            <AssigneeStack todo={todo} />
           </span>
           <ChevronDown size={13} className="shrink-0 text-muted-foreground opacity-100 transition-opacity lg:opacity-0 lg:group-hover:opacity-100" />
         </button>
@@ -273,7 +241,7 @@ function InlineAssigneeEditor({
               onCheckedChange={() => toggle(assignee.id)}
             >
               <span className="flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full ${getPersonDotClasses(assignee.first_name)}`} />
+                <PersonAvatar name={assignee.first_name} />
                 {assignee.first_name}
               </span>
             </DropdownMenuCheckboxItem>
@@ -281,6 +249,99 @@ function InlineAssigneeEditor({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function QuickAddRow({
+  user,
+  assignees,
+  onCreated,
+  onMoreOptions,
+}: {
+  user: User;
+  assignees: TodoAssignee[];
+  onCreated: () => void;
+  onMoreOptions: (title: string) => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Quick-add captures your own work, so the task is assigned to the current
+  // user. The assignees list from the API has the canonical first name; fall
+  // back to deriving one from the profile if the user isn't in it yet.
+  const selfAssignee = (): TodoAssignee => {
+    const match = assignees.find((a) => a.id === user.id);
+    if (match) return match;
+    const firstName = (user.full_name || user.email).trim().split(/\s+/)[0];
+    return { id: user.id, first_name: firstName };
+  };
+
+  const submit = async () => {
+    const trimmed = title.trim();
+    if (!trimmed || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      await apiFetch("/todos", {
+        method: "POST",
+        body: JSON.stringify({
+          title: trimmed,
+          due_date: upcomingSundayLocalISO(),
+          assignees: [selfAssignee()],
+        }),
+      });
+      setTitle("");
+      onCreated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add task.");
+    } finally {
+      setSaving(false);
+      // Keep focus so several tasks can be added back-to-back.
+      inputRef.current?.focus();
+    }
+  };
+
+  return (
+    <div className="mb-4">
+      <div className="flex items-center gap-2.5 rounded-xl border border-border bg-card/80 px-3.5 py-2 shadow-sm backdrop-blur transition-colors focus-within:border-primary/40">
+        <Plus size={15} className="shrink-0 text-muted-foreground" />
+        <input
+          ref={inputRef}
+          type="text"
+          value={title}
+          disabled={saving}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void submit();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              setTitle("");
+            }
+          }}
+          placeholder="Add a task and press Enter — assigned to you, due Sunday"
+          aria-label="Quick add task"
+          className="h-7 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground disabled:opacity-60"
+        />
+        <button
+          type="button"
+          onClick={() => {
+            onMoreOptions(title.trim());
+            setTitle("");
+            setError("");
+          }}
+          disabled={saving}
+          title="Open the full form to add a description, assignees, or recurrence"
+          className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          More options
+        </button>
+      </div>
+      {error && <p className="mt-1.5 px-1 text-xs text-destructive">{error}</p>}
+    </div>
   );
 }
 
@@ -323,7 +384,7 @@ function MultiAssigneePicker({
         ) : (
           assignees
             .filter((assignee) => selectedIds.includes(assignee.id))
-            .map((assignee) => <PersonPill key={assignee.id} name={assignee.first_name} />)
+            .map((assignee) => <PersonChip key={assignee.id} name={assignee.first_name} />)
         )}
       </div>
       <div className="grid max-h-40 gap-1 overflow-y-auto">
@@ -339,7 +400,7 @@ function MultiAssigneePicker({
               }`}
             >
               <span className="flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full ${getPersonDotClasses(assignee.first_name)}`} />
+                <PersonAvatar name={assignee.first_name} />
                 {assignee.first_name}
               </span>
               {selected && <Check size={14} className="text-primary" />}
@@ -372,13 +433,11 @@ function TodoListContent({ user }: { user: User }) {
   const [search, setSearch] = useState("");
   const [section, setSection] = useState<TodoSection>("upcoming");
   const [showCreate, setShowCreate] = useState(false);
-  const [hoursPromptTodo, setHoursPromptTodo] = useState<Todo | null>(null);
-  // Bounded post-create refetch timers so fresh AI estimates appear without
-  // user action. Two fixed timeouts — never an open-ended polling loop.
-  const estimateRefetchTimers = useRef<number[]>([]);
-  useEffect(() => {
-    const timers = estimateRefetchTimers.current;
-    return () => timers.forEach((t) => window.clearTimeout(t));
+  const [createInitialTitle, setCreateInitialTitle] = useState("");
+
+  const openCreateModal = useCallback((initialTitle = "") => {
+    setCreateInitialTitle(initialTitle);
+    setShowCreate(true);
   }, []);
 
   useEffect(() => {
@@ -391,13 +450,13 @@ function TodoListContent({ user }: { user: User }) {
   const fetchTodos = useCallback(async () => {
     try {
       const data = await apiFetch<Todo[]>("/todos");
-      setTodos(sortTodos(data));
+      setTodos(sortTodos(data, user.id));
     } catch {
       setTodos([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user.id]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -457,15 +516,12 @@ function TodoListContent({ user }: { user: User }) {
         method: "PATCH",
         body: JSON.stringify({ is_done: markingDone }),
       });
-      setTodos((prev) => sortTodos(prev.map((t) => (t.id === todo.id ? updated : t))));
+      setTodos((prev) => sortTodos(prev.map((t) => (t.id === todo.id ? updated : t)), user.id));
       // Completing a recurring task creates its next occurrence server-side;
       // refetch so it shows up right away.
       if (markingDone && todo.recurrence_interval) {
         void fetchTodos();
       }
-      // The task is already done; the dialog only collects (optional) actual
-      // hours to calibrate future AI estimates.
-      if (markingDone) setHoursPromptTodo(updated);
     } catch (err) {
       console.error(err);
     }
@@ -486,7 +542,7 @@ function TodoListContent({ user }: { user: User }) {
         method: "PATCH",
         body: JSON.stringify({ title }),
       });
-      setTodos((prev) => sortTodos(prev.map((t) => (t.id === todoId ? updated : t))));
+      setTodos((prev) => sortTodos(prev.map((t) => (t.id === todoId ? updated : t)), user.id));
     } catch (err) {
       console.error(err);
     }
@@ -498,7 +554,7 @@ function TodoListContent({ user }: { user: User }) {
         method: "PATCH",
         body: JSON.stringify({ assignees: assigneePayload(ids, assignees) }),
       });
-      setTodos((prev) => sortTodos(prev.map((t) => (t.id === todoId ? updated : t))));
+      setTodos((prev) => sortTodos(prev.map((t) => (t.id === todoId ? updated : t)), user.id));
     } catch (err) {
       console.error(err);
     }
@@ -576,7 +632,7 @@ function TodoListContent({ user }: { user: User }) {
               ))}
             </SelectContent>
           </Select>
-          <Button size="sm" className="gap-1.5 shadow-sm" onClick={() => setShowCreate(true)}>
+          <Button size="sm" className="gap-1.5 shadow-sm" onClick={() => openCreateModal()}>
             <Plus size={15} /> New task
           </Button>
         </div>
@@ -618,6 +674,15 @@ function TodoListContent({ user }: { user: User }) {
         })}
       </div>
 
+      {section === "upcoming" && (
+        <QuickAddRow
+          user={user}
+          assignees={assignees}
+          onCreated={() => void fetchTodos()}
+          onMoreOptions={openCreateModal}
+        />
+      )}
+
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/40 py-20 text-center">
           <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
@@ -637,7 +702,7 @@ function TodoListContent({ user }: { user: User }) {
                 ? SECTION_META[section].emptyText
                 : "Try another person filter or switch sections to find more tasks."}
           </p>
-          <Button size="sm" className="mt-5 gap-1.5" onClick={() => setShowCreate(true)}>
+          <Button size="sm" className="mt-5 gap-1.5" onClick={() => openCreateModal()}>
             <Plus size={15} /> New task
           </Button>
         </div>
@@ -648,7 +713,7 @@ function TodoListContent({ user }: { user: User }) {
           {filtered.map((todo) => {
             const backlogged = isBacklogged(todo);
             const canManage = todo.assigned_by_id === user.id;
-            const canToggleDone = canManage || isTodoAssignedTo(todo, user.id);
+            const canToggleDone = canCompleteTodo(todo, user);
             return (
               <div
                 key={todo.id}
@@ -693,7 +758,7 @@ function TodoListContent({ user }: { user: User }) {
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-[32px]">
                   <RecurrenceBadge todo={todo} />
-                  <AssigneePills todo={todo} />
+                  <AssigneeStack todo={todo} />
                   <span
                     className={`inline-flex items-center gap-1.5 text-xs ${
                       backlogged
@@ -709,7 +774,6 @@ function TodoListContent({ user }: { user: User }) {
                       by {todo.assigned_by_name}
                     </span>
                   )}
-                  <EstimateBadge todo={todo} />
                 </div>
               </div>
             );
@@ -724,7 +788,6 @@ function TodoListContent({ user }: { user: User }) {
                 <TableHead className="w-[42%] text-xs font-semibold uppercase tracking-wide text-muted-foreground">Task</TableHead>
                 <TableHead className="w-[21%] text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assigned to</TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assigned by</TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Estimate</TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Due date</TableHead>
                 <TableHead className="w-12" />
               </TableRow>
@@ -733,7 +796,7 @@ function TodoListContent({ user }: { user: User }) {
               {filtered.map((todo) => {
                 const backlogged = isBacklogged(todo);
                 const canManage = todo.assigned_by_id === user.id;
-                const canToggleDone = canManage || isTodoAssignedTo(todo, user.id);
+                const canToggleDone = canCompleteTodo(todo, user);
                 return (
                   <TableRow
                     key={todo.id}
@@ -768,11 +831,10 @@ function TodoListContent({ user }: { user: User }) {
                       <InlineTitleEditor
                         todo={todo}
                         canManage={canManage}
-                        backlogged={backlogged}
                         onSave={handleSaveTitle}
                       />
                     </TableCell>
-                    <TableCell className="w-[21%] align-top">
+                    <TableCell className="w-[21%]">
                       <InlineAssigneeEditor
                         todo={todo}
                         assignees={assignees}
@@ -781,16 +843,13 @@ function TodoListContent({ user }: { user: User }) {
                       />
                     </TableCell>
                     <TableCell>
-                      <PersonPill name={todo.assigned_by_name} />
-                    </TableCell>
-                    <TableCell>
-                      <EstimateBadge todo={todo} />
+                      <PersonChip name={todo.assigned_by_name} />
                     </TableCell>
                     <TableCell>
                       <span
                         className={`inline-flex items-center gap-1.5 text-sm ${
                           backlogged
-                            ? "rounded-full bg-rose-500/7 px-2.5 py-1 font-medium text-rose-600/90 ring-1 ring-inset ring-rose-400/10 dark:text-rose-300/90"
+                            ? "font-medium text-rose-600/90 dark:text-rose-300/90"
                             : "text-muted-foreground"
                         }`}
                       >
@@ -824,26 +883,12 @@ function TodoListContent({ user }: { user: User }) {
       {showCreate && (
         <CreateTaskModal
           assignees={assignees}
+          initialTitle={createInitialTitle}
           onClose={() => setShowCreate(false)}
           onCreated={() => {
             setShowCreate(false);
             void fetchTodos();
-            // Pick up the background AI estimate shortly after creation.
-            estimateRefetchTimers.current.forEach((t) => window.clearTimeout(t));
-            estimateRefetchTimers.current = [5000, 15000].map((ms) =>
-              window.setTimeout(() => void fetchTodos(), ms)
-            );
           }}
-        />
-      )}
-
-      {hoursPromptTodo && (
-        <ActualHoursDialog
-          todo={hoursPromptTodo}
-          onClose={() => setHoursPromptTodo(null)}
-          onSaved={(updated) =>
-            setTodos((prev) => sortTodos(prev.map((t) => (t.id === updated.id ? updated : t))))
-          }
         />
       )}
     </div>
@@ -852,14 +897,16 @@ function TodoListContent({ user }: { user: User }) {
 
 function CreateTaskModal({
   assignees,
+  initialTitle = "",
   onClose,
   onCreated,
 }: {
   assignees: TodoAssignee[];
+  initialTitle?: string;
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const [title, setTitle] = useState("");
+  const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState("");
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
   // Default the due date to the end of the week (upcoming Sunday).
@@ -867,6 +914,27 @@ function CreateTaskModal({
   const [recurrence, setRecurrence] = useState<RecurrenceValue>({ interval: null, unit: null });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [estimating, setEstimating] = useState(false);
+  const [estimateError, setEstimateError] = useState("");
+
+  const handleEstimateDueDate = async () => {
+    setEstimating(true);
+    setEstimateError("");
+    try {
+      const result = await apiFetch<{ due_date: string }>("/todos/estimate-due-date", {
+        method: "POST",
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim() || null,
+        }),
+      });
+      setDueDate(result.due_date);
+    } catch {
+      setEstimateError("Couldn't estimate a due date — pick one manually.");
+    } finally {
+      setEstimating(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -952,6 +1020,17 @@ function CreateTaskModal({
                 Due date <span className="text-muted-foreground font-normal">(optional)</span>
               </label>
               <Input id="task-due" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              <button
+                type="button"
+                onClick={() => void handleEstimateDueDate()}
+                disabled={saving || estimating || !title.trim()}
+                title={title.trim() ? "Let AI suggest a due date from the task name and description" : "Type a task name first"}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Sparkles size={12} />
+                {estimating ? "Estimating…" : "Estimate the due date"}
+              </button>
+              {estimateError && <p className="text-xs text-destructive">{estimateError}</p>}
             </div>
           </div>
           <div className="space-y-1.5">

@@ -21,9 +21,18 @@ vi.mock("@/lib/api", () => ({
   ensureFreshToken: vi.fn(),
 }));
 
+// Mutable so individual tests can act as a different user (e.g. the super
+// user); reset via resetMockAuthUser in afterEach/beforeEach.
+const DEFAULT_AUTH_USER = { id: "test-id", email: "test@hexaagents.com", full_name: "Test User" };
+export const mockAuthUser = { ...DEFAULT_AUTH_USER };
+
+export function resetMockAuthUser() {
+  Object.assign(mockAuthUser, DEFAULT_AUTH_USER);
+}
+
 vi.mock("@/components/layout/auth-guard", () => ({
   default: ({ children }: { children: (user: { id: string; email: string; full_name: string }) => React.ReactNode }) =>
-    children({ id: "test-id", email: "test@hexaagents.com", full_name: "Test User" }),
+    children(mockAuthUser),
 }));
 
 vi.mock("@/components/layout/app-sidebar", () => ({

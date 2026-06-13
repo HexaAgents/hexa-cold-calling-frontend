@@ -1,4 +1,14 @@
-import type { Todo, TodoAssignee } from "@/types";
+import type { Todo, TodoAssignee, User } from "@/types";
+
+// Ishaan can tick off any task; everyone else only the tasks they set.
+export const SUPER_USER_EMAIL = "ishaan@hexaagents.com";
+
+export function canCompleteTodo(todo: Todo, user: User): boolean {
+  return (
+    todo.assigned_by_id === user.id ||
+    (user.email ?? "").toLowerCase() === SUPER_USER_EMAIL
+  );
+}
 
 export function getTodoAssignees(todo: Todo): TodoAssignee[] {
   if (todo.assignees && todo.assignees.length > 0) {

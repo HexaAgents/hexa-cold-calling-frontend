@@ -4,23 +4,18 @@
 // always recognizable. Anyone else falls back to a stable hash of their name so
 // the feature still works if the user roster changes.
 
-interface PersonColor {
-  pill: string;
-  dot: string;
-}
-
-const PALETTE: PersonColor[] = [
-  { pill: "bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-950/45 dark:text-sky-200 dark:border-sky-800/70", dot: "bg-sky-400" },
-  { pill: "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-950/45 dark:text-emerald-200 dark:border-emerald-800/70", dot: "bg-emerald-400" },
-  { pill: "bg-violet-100 text-violet-800 border-violet-200 dark:bg-violet-950/45 dark:text-violet-200 dark:border-violet-800/70", dot: "bg-violet-400" },
-  { pill: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/45 dark:text-amber-200 dark:border-amber-800/70", dot: "bg-amber-400" },
-  { pill: "bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-950/45 dark:text-rose-200 dark:border-rose-800/70", dot: "bg-rose-400" },
-  { pill: "bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-950/45 dark:text-teal-200 dark:border-teal-800/70", dot: "bg-teal-400" },
-  { pill: "bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-950/45 dark:text-pink-200 dark:border-pink-800/70", dot: "bg-pink-400" },
-  { pill: "bg-indigo-100 text-indigo-800 border-indigo-200 dark:bg-indigo-950/45 dark:text-indigo-200 dark:border-indigo-800/70", dot: "bg-indigo-400" },
-  { pill: "bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-950/45 dark:text-orange-200 dark:border-orange-800/70", dot: "bg-orange-400" },
-  { pill: "bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-950/45 dark:text-cyan-200 dark:border-cyan-800/70", dot: "bg-cyan-400" },
-  { pill: "bg-pink-50/70 text-pink-600 border-pink-100 dark:bg-pink-950/20 dark:text-pink-200 dark:border-pink-900/40", dot: "bg-pink-200" },
+const PALETTE: string[] = [
+  "bg-sky-500/90 text-white dark:bg-sky-600",
+  "bg-emerald-500/90 text-white dark:bg-emerald-600",
+  "bg-violet-500/90 text-white dark:bg-violet-600",
+  "bg-amber-400/95 text-amber-950 dark:bg-amber-500",
+  "bg-rose-500/90 text-white dark:bg-rose-600",
+  "bg-teal-500/90 text-white dark:bg-teal-600",
+  "bg-pink-500/90 text-white dark:bg-pink-600",
+  "bg-indigo-500/90 text-white dark:bg-indigo-600",
+  "bg-orange-500/90 text-white dark:bg-orange-600",
+  "bg-cyan-500/90 text-white dark:bg-cyan-600",
+  "bg-pink-200 text-pink-800 dark:bg-pink-300 dark:text-pink-950",
 ];
 
 const KNOWN_PEOPLE: Record<string, number> = {
@@ -32,12 +27,30 @@ const KNOWN_PEOPLE: Record<string, number> = {
   mann: 10,
 };
 
-const UNASSIGNED: PersonColor = {
-  pill: "bg-slate-100 text-slate-600 border-slate-200 dark:bg-zinc-900 dark:text-zinc-400 dark:border-zinc-800",
-  dot: "bg-slate-400",
+const UNASSIGNED = "bg-slate-300 text-slate-700 dark:bg-zinc-700 dark:text-zinc-300";
+
+// The API only sends first names, so the known users' last-name initials are
+// hardcoded (Ishaan Makkar, Srijan Tyagi, Sanuka Gunawardena, Aurideep Nayak,
+// Mann Patira). Unknown names fall back to their first two letters.
+const KNOWN_INITIALS: Record<string, string> = {
+  ishaan: "IM",
+  srijan: "ST",
+  sanuka: "SG",
+  aurideep: "AN",
+  mann: "MP",
 };
 
-function paletteFor(name: string): PersonColor {
+export function getPersonInitials(name: string): string {
+  const trimmed = name.trim();
+  const key = trimmed.toLowerCase();
+  if (key in KNOWN_INITIALS) return KNOWN_INITIALS[key];
+  const parts = trimmed.split(/\s+/);
+  if (parts.length >= 2) return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+  return trimmed.slice(0, 2).toUpperCase();
+}
+
+export function getPersonAvatarClasses(name?: string | null): string {
+  if (!name) return UNASSIGNED;
   const key = name.trim().toLowerCase();
   if (key in KNOWN_PEOPLE) return PALETTE[KNOWN_PEOPLE[key]];
   let hash = 0;
@@ -45,14 +58,4 @@ function paletteFor(name: string): PersonColor {
     hash = key.charCodeAt(i) + ((hash << 5) - hash);
   }
   return PALETTE[Math.abs(hash) % PALETTE.length];
-}
-
-export function getPersonPillClasses(name?: string | null): string {
-  if (!name) return UNASSIGNED.pill;
-  return paletteFor(name).pill;
-}
-
-export function getPersonDotClasses(name?: string | null): string {
-  if (!name) return UNASSIGNED.dot;
-  return paletteFor(name).dot;
 }

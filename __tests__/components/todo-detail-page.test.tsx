@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { fireEvent, render, screen, waitFor, act } from "@testing-library/react";
 import TodoDetailPage from "@/app/todo-list/[id]/page";
 import { apiFetch } from "@/lib/api";
+import { mockAuthUser, resetMockAuthUser } from "../setup";
 import type { Todo } from "@/types";
 
 const mockApiFetch = vi.mocked(apiFetch);
@@ -20,10 +21,8 @@ function makeTodo(overrides: Partial<Todo>): Todo {
     assigned_by_name: "Test",
     due_date: "2099-01-01",
     is_done: false,
-    estimated_hours_min: null,
-    estimated_hours_max: null,
-    estimate_status: null,
-    actual_hours: null,
+    recurrence_interval: null,
+    recurrence_unit: null,
     created_at: "2026-01-01T00:00:00",
     updated_at: null,
     ...overrides,
@@ -41,6 +40,7 @@ function mockTodo(todo: Todo) {
 describe("TodoDetailPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetMockAuthUser();
     window.history.pushState({}, "", "/todo-list/test-id");
   });
 
@@ -76,51 +76,6 @@ describe("TodoDetailPage", () => {
     expect(screen.getByText("Saved automatically.")).toBeInTheDocument();
   });
 
-  it("shows the AI estimate in the editable sidebar", async () => {
-    mockTodo(
-      makeTodo({
-        assigned_by_id: CURRENT_USER_ID,
-        estimate_status: "done",
-        estimated_hours_min: 2,
-        estimated_hours_max: 4,
-      })
-    );
-    render(<TodoDetailPage />);
-    await waitFor(() => expect(screen.getByText("Estimate")).toBeInTheDocument());
-    expect(screen.getByText("2–4h")).toBeInTheDocument();
-  });
-
-  it("asks for actual hours after marking the task done", async () => {
-    const todo = makeTodo({ assigned_by_id: CURRENT_USER_ID });
-    mockApiFetch.mockImplementation((path: string, options?: RequestInit) => {
-      if (path === "/todos/test-id" && options?.method === "PATCH") {
-        const body = JSON.parse(options.body as string);
-        return Promise.resolve({ ...todo, ...body } as unknown);
-      }
-      if (path === "/todos/test-id") return Promise.resolve(todo as unknown);
-      if (path === "/todos/assignees") return Promise.resolve([] as unknown);
-      return Promise.resolve({} as unknown);
-    });
-    render(<TodoDetailPage />);
-    await waitFor(() => expect(screen.getByText("Mark done")).toBeInTheDocument());
-
-    fireEvent.click(screen.getByText("Mark done"));
-
-    await waitFor(() => {
-      expect(screen.getByText("How long did this take?")).toBeInTheDocument();
-    });
-
-    // Saving a quick-pick reports the hours via a second PATCH.
-    fireEvent.click(screen.getByRole("button", { name: "1h" }));
-    await waitFor(() => {
-      const patches = mockApiFetch.mock.calls.filter(
-        ([p, o]) => p === "/todos/test-id" && (o as RequestInit)?.method === "PATCH"
-      );
-      expect(patches.length).toBe(2);
-      expect(JSON.parse((patches[1][1] as RequestInit).body as string)).toEqual({ actual_hours: 1 });
-    });
-  });
-
   it("is read-only for non-assigners", async () => {
     mockTodo(makeTodo({ assigned_by_id: "someone-else", assigned_by_name: "Srijan" }));
     render(<TodoDetailPage />);
@@ -130,12 +85,13 @@ describe("TodoDetailPage", () => {
     expect(screen.getByText(/Only Srijan can make changes/)).toBeInTheDocument();
   });
 
-  it("lets the assignee edit and mark done but not delete", async () => {
+  it("lets the assignee edit but not mark done or delete", async () => {
     mockTodo(makeTodo({ assigned_by_id: "someone-else", assigned_by_name: "Srijan", assigned_to_id: CURRENT_USER_ID }));
     render(<TodoDetailPage />);
     await waitFor(() => expect(screen.getByDisplayValue("Prepare onboarding deck")).toBeInTheDocument());
     expect(screen.queryByText("Edit")).not.toBeInTheDocument();
-    expect(screen.getByText("Mark done")).toBeInTheDocument();
+    // Only the creator (or the super user) can tick a task off.
+    expect(screen.queryByText("Mark done")).not.toBeInTheDocument();
     expect(screen.getByText("Saved automatically.")).toBeInTheDocument();
     expect(screen.queryByText("Delete")).not.toBeInTheDocument();
   });
@@ -153,8 +109,26 @@ describe("TodoDetailPage", () => {
     }));
     render(<TodoDetailPage />);
     await waitFor(() => expect(screen.getByDisplayValue("Prepare onboarding deck")).toBeInTheDocument());
-    expect(screen.getByText("Mark done")).toBeInTheDocument();
+    // Assignees can edit details but cannot tick the task off.
+    expect(screen.queryByText("Mark done")).not.toBeInTheDocument();
     expect(screen.getByText("Saved automatically.")).toBeInTheDocument();
+    expect(screen.queryByText("Delete")).not.toBeInTheDocument();
+  });
+
+  it("lets the super user mark any task done", async () => {
+    mockAuthUser.id = "u-ishaan-account";
+    mockAuthUser.email = "ishaan@hexaagents.com";
+    mockAuthUser.full_name = "Ishaan Makkar";
+    mockTodo(makeTodo({
+      assigned_by_id: "someone-else",
+      assigned_by_name: "Srijan",
+      assigned_to_id: "another-person",
+      assigned_to_name: "Mann",
+    }));
+    render(<TodoDetailPage />);
+    await waitFor(() => expect(screen.getByText("Prepare onboarding deck")).toBeInTheDocument());
+    // Not the creator or an assignee, yet Mark done is available; delete stays creator-only.
+    expect(screen.getByText("Mark done")).toBeInTheDocument();
     expect(screen.queryByText("Delete")).not.toBeInTheDocument();
   });
 

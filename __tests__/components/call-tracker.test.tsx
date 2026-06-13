@@ -94,6 +94,9 @@ describe("CallTrackerPage", () => {
       if (path.match(/\/contacts\/[\w-]+\/notes/)) {
         return [];
       }
+      if (path.startsWith("/calls/contact-bundle/")) {
+        return { notes: [], calls: [], email_logs: [], company_flag: null };
+      }
       if (path.match(/\/calls\/contact/)) {
         return [];
       }
@@ -328,21 +331,27 @@ describe("CallTrackerPage", () => {
       if (path === "/settings") return MOCK_SETTINGS;
       if (path.startsWith("/calls/next")) return { ...MOCK_CONTACT, call_outcome: null };
       if (path.match(/\/contacts\/[\w-]+\/notes/)) return [];
-      if (path.match(/\/calls\/contact/)) {
-        return [
-          {
-            id: "prior-log",
-            contact_id: MOCK_CONTACT.id,
-            user_id: "test-user-id",
-            call_date: "2026-04-20",
-            call_method: "browser",
-            phone_number_called: MOCK_CONTACT.mobile_phone,
-            outcome: "didnt_pick_up",
-            is_new_occasion: true,
-            created_at: "2026-04-20T10:00:00",
-          },
-        ];
+      if (path.startsWith("/calls/contact-bundle/")) {
+        return {
+          notes: [],
+          calls: [
+            {
+              id: "prior-log",
+              contact_id: MOCK_CONTACT.id,
+              user_id: "test-user-id",
+              call_date: "2026-04-20",
+              call_method: "browser",
+              phone_number_called: MOCK_CONTACT.mobile_phone,
+              outcome: "didnt_pick_up",
+              is_new_occasion: true,
+              created_at: "2026-04-20T10:00:00",
+            },
+          ],
+          email_logs: [],
+          company_flag: null,
+        };
       }
+      if (path.match(/\/calls\/contact/)) return [];
       if (path === "/calls/log" && options?.method === "POST") {
         logCounter += 1;
         const body = JSON.parse(options.body as string);
@@ -432,7 +441,10 @@ describe("CallTrackerPage", () => {
     setupDefaultMocks();
     const baseImpl = mockApiFetch.getMockImplementation()!;
     mockApiFetch.mockImplementation(async (path: string, options?: RequestInit) => {
-      if (path.startsWith("/companies/flag")) return MOCK_FLAG;
+      // The flag arrives with the rest of the per-contact bundle.
+      if (path.startsWith("/calls/contact-bundle/")) {
+        return { notes: [], calls: [], email_logs: [], company_flag: MOCK_FLAG };
+      }
       return baseImpl(path, options);
     });
 
@@ -443,13 +455,6 @@ describe("CallTrackerPage", () => {
     });
     expect(screen.getByText("Mentioned on a call in June")).toBeInTheDocument();
     expect(screen.getByText(/Flagged by Sam Caller/)).toBeInTheDocument();
-
-    // The flag is queried for the displayed contact's company.
-    expect(
-      mockApiFetch.mock.calls.some(
-        ([p]) => typeof p === "string" && p === "/companies/flag?company_name=ACME%20Corp"
-      )
-    ).toBe(true);
 
     // Flagged companies show Edit/Remove instead of the flag button.
     expect(screen.getByText("Edit")).toBeInTheDocument();
@@ -566,7 +571,9 @@ describe("CallTrackerPage", () => {
       if (path.startsWith("/companies/flag") && options?.method === "DELETE") {
         return { detail: "Flag removed" };
       }
-      if (path.startsWith("/companies/flag")) return MOCK_FLAG;
+      if (path.startsWith("/calls/contact-bundle/")) {
+        return { notes: [], calls: [], email_logs: [], company_flag: MOCK_FLAG };
+      }
       return baseImpl(path, options);
     });
 

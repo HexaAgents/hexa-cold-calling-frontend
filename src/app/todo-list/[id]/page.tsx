@@ -8,10 +8,9 @@ import AppShell from "@/components/layout/app-shell";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { getTodoAssignees, isTodoAssignedTo } from "@/lib/todo-assignees";
-import { getPersonPillClasses, getPersonDotClasses } from "@/lib/todo-colors";
-import { EstimateBadge, ActualHoursDialog } from "@/components/todo/todo-estimate";
-import { RecurrencePicker, recurrenceLabel, type RecurrenceValue } from "@/components/todo/todo-recurrence";
+import { canCompleteTodo, getTodoAssignees, isTodoAssignedTo } from "@/lib/todo-assignees";
+import { PersonAvatar, PersonChip } from "@/components/todo/person-chip";
+import { type RecurrenceValue } from "@/components/todo/todo-recurrence";
 import { ArrowLeft, Trash2, CheckCircle2, Circle, AlertTriangle, CalendarDays, Check } from "lucide-react";
 import type { Todo, TodoAssignee, User } from "@/types";
 
@@ -43,25 +42,13 @@ function formatDate(d: string | null): string {
   });
 }
 
-function PersonPill({ name }: { name: string | null }) {
-  if (!name) return <span className="text-sm text-muted-foreground">Unassigned</span>;
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${getPersonPillClasses(name)}`}
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${getPersonDotClasses(name)}`} />
-      {name}
-    </span>
-  );
-}
-
-function AssigneePills({ todo }: { todo: Todo }) {
+function AssigneeChips({ todo }: { todo: Todo }) {
   const assignees = getTodoAssignees(todo);
   if (assignees.length === 0) return <span className="text-sm text-muted-foreground">Unassigned</span>;
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-wrap gap-x-3 gap-y-1.5">
       {assignees.map((assignee) => (
-        <PersonPill key={assignee.id} name={assignee.first_name} />
+        <PersonChip key={assignee.id} name={assignee.first_name} />
       ))}
     </div>
   );
@@ -112,14 +99,14 @@ function MultiAssigneePicker({
               type="button"
               onClick={() => toggle(assignee.id)}
               aria-pressed={selected}
-              className={`inline-flex min-w-30 items-center justify-between gap-2 rounded-full border px-3 py-1.5 text-left text-sm font-medium transition-all ${
+              className={`inline-flex min-w-30 items-center justify-between gap-2 rounded-full border py-1 pl-1.5 pr-3 text-left text-sm font-medium transition-all ${
                 selected
-                  ? `${getPersonPillClasses(assignee.first_name)} shadow-sm ring-1 ring-current/10`
+                  ? "border-primary/35 bg-primary/8 text-foreground shadow-sm"
                   : "border-border bg-background/60 text-muted-foreground hover:border-primary/30 hover:bg-accent/60 hover:text-foreground"
               }`}
             >
               <span className="flex items-center gap-2">
-                <span className={`h-2 w-2 rounded-full ${getPersonDotClasses(assignee.first_name)}`} />
+                <PersonAvatar name={assignee.first_name} size="md" className={selected ? "" : "opacity-70 saturate-50"} />
                 {assignee.first_name}
               </span>
               {selected && <Check size={13} />}
@@ -162,7 +149,6 @@ function TodoDetailContent({ user }: { user: User }) {
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState("");
   const [recurrence, setRecurrence] = useState<RecurrenceValue>({ interval: null, unit: null });
-  const [showHoursDialog, setShowHoursDialog] = useState(false);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const todoRef = useRef<Todo | null>(null);
   const assigneesRef = useRef<TodoAssignee[]>([]);
@@ -251,7 +237,7 @@ function TodoDetailContent({ user }: { user: User }) {
 
   const canManage = !!todo && todo.assigned_by_id === user.id;
   const canEdit = !!todo && (canManage || isTodoAssignedTo(todo, user.id));
-  const canToggleDone = !!todo && (canManage || isTodoAssignedTo(todo, user.id));
+  const canToggleDone = !!todo && canCompleteTodo(todo, user);
   const backlogged = !!todo && !todo.is_done && !!todo.due_date && todo.due_date < todayStr();
 
   useEffect(() => {
@@ -352,10 +338,7 @@ function TodoDetailContent({ user }: { user: User }) {
   };
   const handleToggleDone = async () => {
     if (!todo) return;
-    const markingDone = !todo.is_done;
-    await patch({ is_done: markingDone });
-    // Task is already done; the dialog just collects optional actual hours.
-    if (markingDone) setShowHoursDialog(true);
+    await patch({ is_done: !todo.is_done });
   };
 
   const handleDelete = async () => {
@@ -427,14 +410,14 @@ function TodoDetailContent({ user }: { user: User }) {
                 <p className="text-muted-foreground italic">No description.</p>
               )}
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <div className="rounded-xl border border-border bg-muted/20 p-3.5">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Assigned to</p>
-                <AssigneePills todo={todo} />
+                <AssigneeChips todo={todo} />
               </div>
               <div className="rounded-xl border border-border bg-muted/20 p-3.5">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Assigned by</p>
-                <PersonPill name={todo.assigned_by_name} />
+                <PersonChip name={todo.assigned_by_name} />
               </div>
               <div className="rounded-xl border border-border bg-muted/20 p-3.5">
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Due date</p>
@@ -442,10 +425,6 @@ function TodoDetailContent({ user }: { user: User }) {
                   <CalendarDays size={14} className="opacity-70" />
                   {formatDate(todo.due_date)}
                 </p>
-              </div>
-              <div className="rounded-xl border border-border bg-muted/20 p-3.5">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Estimate</p>
-                <EstimateBadge todo={todo} />
               </div>
             </div>
           </div>
@@ -509,14 +488,7 @@ function TodoDetailContent({ user }: { user: User }) {
                 <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                   Assigned by
                 </span>
-                <PersonPill name={todo.assigned_by_name} />
-              </div>
-
-              <div className="flex items-center justify-between gap-3 border-b border-border/70 pb-3">
-                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Estimate
-                </span>
-                <EstimateBadge todo={todo} />
+                <PersonChip name={todo.assigned_by_name} />
               </div>
 
               <div className="space-y-1.5">
@@ -542,10 +514,12 @@ function TodoDetailContent({ user }: { user: User }) {
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4 lg:col-span-2">
               <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={handleToggleDone} disabled={saving}>
-                  {todo.is_done ? <Circle size={14} /> : <CheckCircle2 size={14} />}
-                  {todo.is_done ? "Mark not done" : "Mark done"}
-                </Button>
+                {canToggleDone && (
+                  <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={handleToggleDone} disabled={saving}>
+                    {todo.is_done ? <Circle size={14} /> : <CheckCircle2 size={14} />}
+                    {todo.is_done ? "Mark not done" : "Mark done"}
+                  </Button>
+                )}
                 {getTodoAssignees(todo).length > 0 && (
                   <Button type="button" size="sm" variant="ghost" onClick={handleUnassign} disabled={saving}>
                     Unassign
@@ -584,17 +558,6 @@ function TodoDetailContent({ user }: { user: User }) {
             </div>
           </div>
         </div>
-      )}
-
-      {showHoursDialog && todo && (
-        <ActualHoursDialog
-          todo={todo}
-          onClose={() => setShowHoursDialog(false)}
-          onSaved={(updated) => {
-            todoRef.current = updated;
-            setTodo(updated);
-          }}
-        />
       )}
     </div>
   );

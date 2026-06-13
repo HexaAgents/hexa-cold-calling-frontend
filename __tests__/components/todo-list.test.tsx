@@ -47,10 +47,6 @@ describe("TodoListPage", () => {
             assigned_by_name: "Ishaan",
             due_date: "2099-06-03",
             is_done: false,
-            estimated_hours_min: null,
-            estimated_hours_max: null,
-            estimate_status: null,
-            actual_hours: null,
             created_at: "2026-06-01T00:00:00",
             updated_at: null,
           },
@@ -62,13 +58,14 @@ describe("TodoListPage", () => {
 
   // Tasks render twice in the DOM: once in the mobile card list and once in
   // the desktop table (visibility is controlled by CSS breakpoints).
+  // Assignees render as initials badges labelled with the person's name.
   it("renders every assignee on a shared task", async () => {
     render(<TodoListPage />);
 
     await waitFor(() => {
       expect(screen.getAllByText("Shared task").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("Srijan").length).toBeGreaterThan(0);
-      expect(screen.getAllByText("Ishaan").length).toBeGreaterThan(0);
+      expect(screen.getAllByLabelText("Srijan").length).toBeGreaterThan(0);
+      expect(screen.getAllByLabelText("Ishaan").length).toBeGreaterThan(0);
     });
   });
 

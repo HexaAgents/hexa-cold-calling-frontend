@@ -289,10 +289,6 @@ export interface Todo {
   recurrence_interval: number | null;
   recurrence_unit: RecurrenceUnit | null;
   recurrence_spawned?: boolean;
-  estimated_hours_min: number | null;
-  estimated_hours_max: number | null;
-  estimate_status: "pending" | "done" | "failed" | null;
-  actual_hours: number | null;
   created_at: string | null;
   updated_at: string | null;
 }
